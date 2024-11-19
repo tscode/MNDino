@@ -209,7 +209,7 @@ function Makie.process_interaction(
     index = seg.wctx[:active_index][]
     data = seg.wctx[index][:data][]
     cmin, cmax = seg.wctx[index][:crange][]
-    cdata = clamp.(cmin, data, cmax)
+    cdata = clamp.(data, cmin, cmax)
 
     segment_task = Threads.@spawn begin
       ImageSegmentation.seeded_region_growing(
