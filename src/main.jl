@@ -23,71 +23,38 @@ function julia_main()::Cint
     :color_button_up => RGBf(0.94, 0.94, 0.94),
   )
 
-  project = Project("TEST", paths)
+  project = Project("TEST", paths, theme = theme)
+
+  store = ImageStore(paths)
 
   widget_project = ProjectWidget("Project")
-  addwidget!(project, :project, widget_project)
+  widget_image = ImageSelectorWidget("Image", provider = :store)
+  widget_view = ChannelViewWidget("Channel View", provider = :image)
+  widget_mask = ChannelViewMaskWidget(provider = :view)
+  # widget_segment = SegmentWidget(
+  #   "Segments",
+  #   provider = :view,
+  # )
 
-  widget_image = ImageSelectorWidget("Image")
-  addwidget!(project, :image, widget_image)
-
-  widget_view = ChannelViewWidget(
-    "Channel View",
-    provider = :image,
-  )
-  addwidget!(project, :view, widget_view)
-
-  widget_mask = ChannelViewMaskWidget(
-    "",
-    provider = :view,
-  )
-  addwidget!(project, :mask, widget_mask)
-
-  widget_segment = SegmentWidget(
-    "Segments",
-    provider = :view,
-  )
-
-  addwidget!(project, :segment, widget_segment)
-
-  # project = SarahsCellSegmenter.loadproject("test")
+  addprovider!(project, :store, store)
+  addprovider!(project, :project, widget_project)
+  addprovider!(project, :image, widget_image)
+  addprovider!(project, :view, widget_view)
+  addprovider!(project, :mask, widget_mask)
 
   ctx = initcontext(project)
 
   fig = Figure(size = (1000, 800), backgroundcolor = :lightgray)
 
   layout_project = GridLayout(fig[1,1], alignmode = Outside(15))
-
-  plotwidget(
-    project.widgets[1][2],
-    layout_project,
-    ctx[:widgets][:project];
-    theme,
-    frame = true
-  )
-
   layout_image = GridLayout(fig[1,2], alignmode = Outside(15))
-  plotwidget(
-    project.widgets[2][2],
-    layout_image,
-    ctx[:widgets][:image];
-    theme,
-    frame = true
-  )
-
   layout_view_mask =  GridLayout(fig[2,1:2], 1, 2)
+
   colgap!(layout_view_mask, 1, 5)
 
   layout_view = GridLayout(
     layout_view_mask[1,1],
     alignmode = Outside(15)
-  )
-  plotwidget(
-    project.widgets[3][2],
-    layout_view,
-    ctx[:widgets][:view];
-    theme,
-    frame = true
   )
 
   layout_mask = GridLayout(
@@ -96,14 +63,14 @@ function julia_main()::Cint
     tellheight = false
   )
 
-  plotwidget(
-    project.widgets[4][2],
-    layout_mask,
-    ctx[:widgets][:mask];
-    theme,
-    frame = true,
-    framepadding = 5,
+  layouts = (
+    :project => layout_project,
+    :image => layout_image,
+    :view => layout_view,
+    :mask => layout_mask,
   )
+
+  runproject(project, layouts; options = (:mask => (framepadding = 5,)))
 
   screen = display(fig)
   wait(screen)

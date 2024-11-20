@@ -20,7 +20,7 @@ struct Project
   paths::Vector{String}
   channels::Vector{Channel}
   theme::Dict
-  widgets::Vector{Pair{Symbol, Widget}}
+  providers::Vector{Pair{Symbol, Provider}}
 end
 
 function Project(
@@ -65,22 +65,22 @@ function Project(
     return true
   end
 
-  widgets = Vector{Pair{Symbol, Widget}}()
+  providers = Vector{Pair{Symbol, Provider}}()
   return Project(
     name,
     comment,
     paths,
     channels,
     theme,
-    widgets,
+    providers,
   )
 end
 
-function addwidget!(project, key, widget::Widget)
-  @assert !any(isequal(key), first.(project.widgets)) """
-  Location key :$key is already taken by another widget.
+function addprovider!(project, key, provider::Provider)
+  @assert !any(isequal(key), first.(project.providers)) """
+  Location key :$key is already taken by another provider.
   """
-  push!(project.widgets, key => widget)
+  push!(project.providers, key => provider)
   return
 end
 
@@ -97,18 +97,18 @@ function initcontext(project::Project)
   ctx[:nimages] = lift(length, ctx[:paths])
   ctx[:nchannels] = lift(length, ctx[:channels])
   
-  ctx[:widgets] = Dict{Symbol, Dict}()
+  ctx[:providers] = Dict{Symbol, Dict}()
 
-  for (key, widget) in project.widgets
-    ctx[:widgets][key] = initcontext(widget, ctx)
+  for (key, provider) in project.providers
+    ctx[:providers][key] = initcontext(provider, ctx)
   end
 
   return ctx
 end
 
 function updateproject(project, ctx)
-  widgets = map(project.widgets) do (key, widget)
-    return key => updatewidget(widget, ctx[:widgets][key])
+  providers = map(project.providers) do (key, provider)
+    return key => update(provider, ctx[:providers][key])
   end
   return Project(
     getvalue(ctx, :name),
@@ -116,8 +116,34 @@ function updateproject(project, ctx)
     getvalue(ctx, :paths),
     getvalue(ctx, :channels),
     getvalue(ctx, :theme),
-    widgets,
+    providers,
   )
+end
+
+"""
+    runproject(project::Project, layouts; options)
+
+Run the project by initializing the runtime context and populating `layouts`
+with the corresponding widgets.
+
+Returns the runtime context.
+"""
+function runproject(project, layouts; options)
+  options = Dict(options)
+  layouts = Dict(layouts)
+  ctx = initcontext(project)
+  for (key, provider) in project.providers
+    if provider isa Widget
+      plotwidget(
+        provider,
+        layouts[key],
+        ctx[:providers][key];
+        theme = project.theme,
+        get(options, key, (;))...,
+      )
+    end
+  end
+  return ctx
 end
 
 """

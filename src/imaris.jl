@@ -18,8 +18,10 @@ end
 
 extension(::Type{ImarisFile}) = ".ims"
 
+location(ims::ImarisFile) = ims.path
+
 function variants(ims::ImarisFile)
-  error("TODO")
+  error("TODO - this is possible to read from imaris files!")
 end
 
 defaultvariant(ims::ImarisFile) = (time=0, resolution=0)

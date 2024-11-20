@@ -86,7 +86,7 @@ function initcontext(widget::ChannelViewWidget, ctx)
     obs = false,
   )
 
-  loadfromwidget!(
+  loadentries!(
     wctx,
     ctx,
     wctx[:provider],

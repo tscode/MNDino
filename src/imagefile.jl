@@ -89,6 +89,17 @@ intensive.
 function imagedata end
 
 """
+    location(img::ImageFile) 
+
+If implemented, returns the location (path) of an image on the hard drive.
+
+Defaults to "".
+"""
+function location(::ImageFile)
+  return ""
+end
+
+"""
 Global format storage. Can be extende by new subtypes of `ImageFile`.
 """
 const FORMATS = Dict{String, Type{<: ImageFile}}()

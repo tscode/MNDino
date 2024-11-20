@@ -70,9 +70,14 @@ include("imagefile.jl")
 include("imaris.jl")
 include("filter.jl")
 
+include("provider.jl")
 include("widget.jl")
 include("project.jl")
 
+# providers
+include("imagestore.jl")
+
+# widgets
 include("widgets/project.jl")
 include("widgets/imageselector.jl")
 include("widgets/channelview.jl")
@@ -80,6 +85,7 @@ include("widgets/channelviewmask.jl")
 include("widgets/segment.jl")
 
 # --- For efficient compilation of apps --- #
+# include("precompile.jl")
 include("main.jl")
 
 end # module MNDino

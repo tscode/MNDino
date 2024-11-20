@@ -20,7 +20,7 @@ function initcontext(widget::ChannelViewMaskWidget, ctx)
   loadentries!(wctx, widget, [:provider], obs=false)
 
   # Derive entries from the parent channel view
-  cctx = loadwidgetcontext(ctx, wctx[:provider])
+  cctx = loadcontext(ctx, wctx[:provider])
   wctx[:mouse_position] = cctx[:mouse_position]
   wctx[:active_index] = cctx[:active_index]
   wctx[:nchannels] = cctx[:nchannels]

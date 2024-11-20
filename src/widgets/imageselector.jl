@@ -5,17 +5,24 @@ Widget for the graphical selection of images from the project repository.
 struct ImageSelectorWidget <: Widget
   title::String
   selected::Int
+  provider::Symbol
 end
 
-function ImageSelectorWidget(title; selected = 1)
-  return ImageSelectorWidget(title, selected)
+function ImageSelectorWidget(title; provider, selected = 1)
+  return ImageSelectorWidget(title, selected, provider)
 end
 
 function initcontext(widget::ImageSelectorWidget, ctx)
   wctx = Dict{Union{Symbol, Int}, Any}()
 
-  loadentries!(wctx, ctx, [:paths, :nimages])
-  loadentries!(wctx, widget, obs = true)
+  loadentries!(wctx, widget, [:provider], obs = false)
+  loadentries!(wctx, widget, [:title, :selected], obs = true)
+  loadentries!(wctx, ctx, wctx[:provider], [:entries])
+
+  wctx[:paths] = lift(entries -> location.(entries), wctx[:entries])
+  wctx[:nimages] = lift(length, wctx[:paths])
+
+  # loadentries!(wctx, ctx, [:paths, :nimages])
 
   # Keep selection index updated if paths change
   on(wctx[:paths]) do paths
