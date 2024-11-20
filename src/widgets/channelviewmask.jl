@@ -60,7 +60,7 @@ function _pointer_interaction!(wctx)
       ax,
       lift(p -> [p], wctx[:mouse_position]),
       markersize=6,
-      strokewidh=1,
+      strokewidth=1,
       color=:white,
       strokecolor=:black,
       visible=wctx[:pointer_on],
