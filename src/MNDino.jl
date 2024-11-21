@@ -82,7 +82,7 @@ include("widgets/project.jl")
 include("widgets/imageselector.jl")
 include("widgets/channelview.jl")
 include("widgets/channelviewmask.jl")
-include("widgets/segment.jl")
+include("widgets/segmentanalysis.jl")
 
 # --- For efficient compilation of apps --- #
 # include("precompile.jl")

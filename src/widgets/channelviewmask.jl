@@ -25,6 +25,7 @@ function initcontext(widget::ChannelViewMaskWidget, ctx)
   wctx[:mouse_position] = cctx[:mouse_position]
   wctx[:focused] = cctx[:focused]
   wctx[:nchannels] = cctx[:nchannels]
+  wctx[:nmasks] = cctx[:nchannels]
 
   for index in 1:wctx[:nchannels]
     wctx[index] = Dict{Symbol,Any}()
@@ -33,6 +34,7 @@ function initcontext(widget::ChannelViewMaskWidget, ctx)
     wctx[index][:size] = cctx[index][:size]
     wctx[index][:color] = cctx[index][:color]
     wctx[index][:crange] = cctx[index][:crange]
+    wctx[index][:name] = cctx[index][:name]
 
     wctx[index][:mask] = lift(wctx[index][:size]) do sz
       mask = BitMatrix(undef, sz)

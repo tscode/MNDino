@@ -31,16 +31,14 @@ function main(; wait = false)
   widget_image = ImageSelectorWidget("Image", store_provider = :store)
   widget_view = ChannelViewWidget("Channel View", store_provider = :store)
   widget_mask = ChannelViewMaskWidget(parent = :view, store_provider = :store)
-  # widget_segment = SegmentWidget(
-  #   "Segments",
-  #   provider = :view,
-  # )
+  widget_analysis = SegmentAnalysisWidget("Segment Analysis", mask_provider = :mask)
 
   addprovider!(project, :store, store)
   addprovider!(project, :project, widget_project)
   addprovider!(project, :image, widget_image)
   addprovider!(project, :view, widget_view)
   addprovider!(project, :mask, widget_mask)
+  addprovider!(project, :analysis, widget_analysis)
 
   ctx = initcontext(project)
 
@@ -63,11 +61,16 @@ function main(; wait = false)
     tellheight = false
   )
 
+  layout_analysis = GridLayout(
+    fig[3, :], alignmode = Outside(15)
+  )
+
   layouts = (
     :project => layout_project,
     :image => layout_image,
     :view => layout_view,
     :mask => layout_mask,
+    :analysis => layout_analysis,
   )
 
   runproject(project, layouts; options = (:mask => (framepadding = 5,)))

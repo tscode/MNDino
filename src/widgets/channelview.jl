@@ -371,9 +371,9 @@ function _channelview_slices(layout, yindex, wctx, theme)
       xticklabelsize = theme[:widget_ticksize],
       panbutton=Makie.Mouse.left,
     )
-    deregister_interaction!(ax, :rectanglezoom)
-    deregister_interaction!(ax, :dragpan)
-    register_interaction!(ax, :dragpan, DragPan(0.2))
+    Makie.deregister_interaction!(ax, :rectanglezoom)
+    Makie.deregister_interaction!(ax, :dragpan)
+    Makie.register_interaction!(ax, :dragpan, DragPan(0.2))
 
     Makie.image!(
       ax,
