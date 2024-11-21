@@ -21,13 +21,12 @@ struct ChannelViewWidget <: Widget
   filter::Filter
   channels::Vector{ChannelSpec}
   default_view::Union{View2D, Nothing}
-  provider::Symbol
-  views::Dict{String, View2D}
+  store_provider::Symbol
 end
 
 function ChannelViewWidget(
   title::String;
-  provider,
+  store_provider,
   channels = [],
   filter = NoFilter(),
   default_view = nothing,
@@ -37,21 +36,9 @@ function ChannelViewWidget(
     filter,
     channels,
     default_view,
-    provider,
-    Dict{String, View2D}(),
+    store_provider,
   )
 end
-
-# function _subsample(data, s)
-#   if any(size(data) .% 2^(s-1) .!= 0)
-#     @warn """
-#     Subsampling currently only works if image size is divisible by 2^(s-1).
-#     """
-#     return data
-#   end
-#   sz = div.(size(data), 2^(s-1))
-#   return ImageTransformations.imresize(data, sz)
-# end
 
 function _derive_channel_specs(image; variant = nothing)
   return map(1:nchannels(image)) do cindex
@@ -73,65 +60,40 @@ function initcontext(widget::ChannelViewWidget, ctx)
   loadentries!(
     wctx,
     widget,
-    [:title, :filter, :default_view],
+    [:title, :filter=>Filter, :default_view],
     obs = true,
   )
-  # TODO: find a consistent way to load generic observables
-  wctx[:filter] = Observable{Filter}(wctx[:filter][])
+
+  @show typeof(wctx[:filter])
 
   loadentries!(
     wctx,
     widget,
-    [:channels, :views, :provider],
+    [:channels, :store_provider],
     obs = false,
   )
 
-  loadentries!(
-    wctx,
-    ctx,
-    wctx[:provider],
-    [:path, :image]
-  )
+  store = loadcontext(ctx, :store)
+  shelf = addshelf!(store, :channelview)
+
+  loadentries!(wctx, store, [:entry])
+
+  wctx[:image] = lift(imagefile, wctx[:entry])
+  wctx[:nzlayers] = lift(nzlayers, wctx[:image])
+
+  wctx[:view] = Observable(_derive_default_view(wctx[:image][]))
+  wctx[:zindex] = lift(getvalue(:zindex), wctx[:view])
+  wctx[:variant] = lift(getvalue(:variant), wctx[:view])
+
+  wctx[:mouse_position] = Observable(Point2f(NaN, NaN))
+  wctx[:focused] = Observable(-1, ignore_equal_values = true)
+  wctx[:reset_clipping] = Observable(nothing)
 
   # Automatically derive channels from first image if not provided
   if isempty(wctx[:channels])
-    image = wctx[:image][]
-    wctx[:channels] = _derive_channel_specs(image)
+    wctx[:channels] = _derive_channel_specs(wctx[:image][])
   end
-
   wctx[:nchannels] = length(wctx[:channels])
-
-  old_path = Ref(wctx[:path][])
-  wctx[:view] = lift(wctx[:path]) do path
-    # Change old view
-    if path != old_path[]
-      updated_view = View2D(
-        getvalue(wctx, :zindex),
-        getvalue(wctx, :variant),
-      )
-      wctx[:views][old_path[]] = updated_view
-      old_path[] = path
-    end
-
-    # Create / load new view
-    if haskey(wctx[:views], path)
-      view = wctx[:views][path]
-    else
-      view = getvalue(wctx, :default_view)
-      if isnothing(view)
-        view = _derive_default_view(wctx[:image][])
-      end
-    end
-    return view
-  end
-
-  wctx[:zindex] = lift(getvalue(:zindex), wctx[:view])
-  wctx[:variant] = lift(getvalue(:variant), wctx[:view])
-  wctx[:nzlayers] = lift(nzlayers, wctx[:image])
-
-  wctx[:mouse_position] = Observable(Point2f(NaN, NaN))
-  wctx[:active_index] = Observable(-1, ignore_equal_values = true)
-  wctx[:reset_clipping] = Observable(nothing)
 
   # Entries for each channel
   for c in wctx[:channels]
@@ -140,7 +102,8 @@ function initcontext(widget::ChannelViewWidget, ctx)
     wctx[c.index][:name] = c.name
     wctx[c.index][:color] = c.color
 
-    data = lift(wctx[:image], wctx[:view]) do img, view
+    data = lift(wctx[:view]) do view
+      img = wctx[:image][]
       # TODO: this is currently inefficient, since both
       # :image and :view are updated each time the path changes
       return Float32.(imagedata(
@@ -170,6 +133,15 @@ function initcontext(widget::ChannelViewWidget, ctx)
     wctx[c.index][:raw][:data] = data
     wctx[c.index][:raw][:size] = lift(size, data)
     wctx[c.index][:raw][:extrema] = lift(extrema, data)
+  end
+
+  # React if the selected image changes
+  # TODO: Handle the situation where entries are nothing!
+  on(store[:change]) do (next, prev)
+    shelf[prev.id] = View2D(wctx[:zindex][], wctx[:variant][])
+    wctx[:view][] = get(shelf, next.id) do
+      _derive_default_view(imagefile(next))
+    end
   end
 
   return wctx
@@ -409,7 +381,7 @@ function _channelview_slices(layout, yindex, wctx, theme)
       colorrange = wctx[index][:crange],
       colormap = [:black, wctx[index][:color]],
     )
-    onany(wctx[:path], wctx[index][:size]) do _, _
+    onany(wctx[:entry], wctx[index][:size]) do _, _
       reset_limits!(ax)
     end
     wctx[index][:axis][] = ax
@@ -430,10 +402,10 @@ function _channelview_mouseposition!(wctx)
     register_interaction!(ax, :channelview) do event::MouseEvent, ax
       if event.type in events 
         wctx[:mouse_position][] = event.data
-        wctx[:active_index][] = index
+        wctx[:focused][] = index
       elseif event.type == MouseEventTypes.out
         wctx[:mouse_position][] = Point2f(NaN, NaN)
-        wctx[:active_index][] = -1
+        wctx[:focused][] = -1
       end
     end
   end

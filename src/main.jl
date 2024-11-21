@@ -2,7 +2,7 @@
 
 using GLMakie
 
-function julia_main()::Cint
+function main(; wait = false)
 
   paths = [
     "data/H2bub488_MDC1568_POLS5647_mnbody27_2024-11-01.ims",
@@ -28,9 +28,9 @@ function julia_main()::Cint
   store = ImageStore(paths)
 
   widget_project = ProjectWidget("Project")
-  widget_image = ImageSelectorWidget("Image", provider = :store)
-  widget_view = ChannelViewWidget("Channel View", provider = :image)
-  widget_mask = ChannelViewMaskWidget(provider = :view)
+  widget_image = ImageSelectorWidget("Image", store_provider = :store)
+  widget_view = ChannelViewWidget("Channel View", store_provider = :store)
+  widget_mask = ChannelViewMaskWidget(parent = :view, store_provider = :store)
   # widget_segment = SegmentWidget(
   #   "Segments",
   #   provider = :view,
@@ -73,8 +73,10 @@ function julia_main()::Cint
   runproject(project, layouts; options = (:mask => (framepadding = 5,)))
 
   screen = display(fig)
-  wait(screen)
+  if wait
+    Base.wait(screen)
+  end
 
-  return 0
+  return ctx
 end
 

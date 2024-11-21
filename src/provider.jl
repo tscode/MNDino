@@ -48,13 +48,16 @@ end
 
 """
     loadentry(obj, key [; obs])
+    loadentry(obj, key=>T; obs = true)
 
 Return the entry located at `key` from the object `obj`.
+
+If `obs == true`, the second argument may be a pair of a key and a type `T` that
+determines the wrapping observable type.
 """
 function loadentry(dict::Dict, key; obs = nothing)
   val = get(dict, key) do
     @error "Could not load entry :$key from context."
-    @show keys(dict)
     return nothing
   end
   return _obs_or_value(val, obs)
@@ -69,6 +72,15 @@ function loadentry(obj, key; obs = nothing)
   return _obs_or_value(val, obs)
 end
 
+function loadentry(obj, key::Pair; obs = nothing)
+  if obs == false
+    @warn "Type hint when loading entry $key contradict option obs = $obs."
+  end
+  key, T = key
+  value = loadentry(obj, key; obs = false)
+  return Observable{T}(value)
+end
+
 """
     loadentries!(pctx, obj, keys [; obs])
 
@@ -76,8 +88,9 @@ Load all entries located at a key in the iterable `keys` from the object `obj`
 into the local context `pctx`.
 """
 function loadentries!(pctx, obj, keys; obs = nothing)
-  for key in keys
-    pctx[key] = loadentry(obj, key; obs)
+  for k in keys
+    key = (k isa Pair) ? k[1] : k
+    pctx[key] = loadentry(obj, k; obs)
   end
   return
 end
@@ -114,8 +127,9 @@ Load all entries located at a key in the iterable `keys` from the local context
 of `provider` into the context `pctx`.
 """
 function loadentries!(pctx, ctx, provider, keys; obs = nothing)
-  for key in keys
-    pctx[key] = loadentry(ctx, provider, key; obs)
+  for k in keys
+    key = (k isa Pair) ? k[1] : k
+    pctx[key] = loadentry(ctx, provider, k; obs)
   end
   return
 end

@@ -6,23 +6,24 @@ for `ChannelViewWidiget`s.
 """
 struct ChannelViewMaskWidget <: Widget
   title::String
-  provider::Symbol
+  parent::Symbol
+  store_provider::Symbol
 end
 
-function ChannelViewMaskWidget(title=""; provider)
-  return ChannelViewMaskWidget(title, provider)
+function ChannelViewMaskWidget(title=""; parent, store_provider)
+  return ChannelViewMaskWidget(title, parent, store_provider)
 end
 
 function initcontext(widget::ChannelViewMaskWidget, ctx)
   wctx = Dict{Union{Int,Symbol},Any}()
 
   loadentries!(wctx, widget, [:title], obs=true)
-  loadentries!(wctx, widget, [:provider], obs=false)
+  loadentries!(wctx, widget, [:parent, :store_provider], obs=false)
 
   # Derive entries from the parent channel view
-  cctx = loadcontext(ctx, wctx[:provider])
+  cctx = loadcontext(ctx, wctx[:parent])
   wctx[:mouse_position] = cctx[:mouse_position]
-  wctx[:active_index] = cctx[:active_index]
+  wctx[:focused] = cctx[:focused]
   wctx[:nchannels] = cctx[:nchannels]
 
   for index in 1:wctx[:nchannels]
@@ -40,11 +41,35 @@ function initcontext(widget::ChannelViewMaskWidget, ctx)
     end
   end
 
+  store = loadcontext(ctx, wctx[:store_provider])
+  shelf = addshelf!(store, :mask)
+
+  on(store[:change_from]) do prev
+    if !haskey(shelf, prev.id)
+      shelf[prev.id] = Dict{Int, BitMatrix}()
+    end
+    for index in 1:wctx[:nchannels]
+      shelf[prev.id][index] = copy(wctx[index][:mask][])
+    end
+  end
+
+  on(store[:change_to]) do next
+    for index in 1:wctx[:nchannels]
+      if haskey(shelf, next.id)
+        wctx[index][:mask][] = shelf[next.id][index]
+      else
+        sz = wctx[index][:size][]
+        mask = BitMatrix(undef, sz)
+        mask .= false
+        wctx[index][:mask][] = mask
+      end
+    end
+  end
+
   wctx[:pointer_on] = Observable(true)
   wctx[:mask_on] = Observable(true)
   wctx[:pen_on] = Observable(false)
   wctx[:segment_on] = Observable(false)
-
   wctx[:pen_size] = Observable(100)
 
   return wctx
@@ -137,7 +162,7 @@ function _pen_interaction!(wctx)
 
     visible = lift(
       wctx[:pen_on],
-      wctx[:active_index],
+      wctx[:focused],
     ) do pen, active
       return pen && active == index
     end
@@ -206,7 +231,7 @@ function Makie.process_interaction(
       Tuple(round.(Int, seed))
     end
 
-    index = seg.wctx[:active_index][]
+    index = seg.wctx[:focused][]
     data = seg.wctx[index][:data][]
     cmin, cmax = seg.wctx[index][:crange][]
     cdata = clamp.(data, cmin, cmax)
@@ -220,11 +245,7 @@ function Makie.process_interaction(
     @async begin
       segments = fetch(segment_task)
       lmap = ImageSegmentation.labels_map(segments)
-      if event.type == MouseEventTypes.leftup
-        seg.mask[] .|= lmap .== 1
-      else
-        seg.mask[] .= lmap .== 1
-      end
+      seg.mask[] .|= lmap .== 1
       seg.seeds[] = Point2f[]
       notify(seg.mask)
     end
@@ -238,7 +259,7 @@ function _segment_interaction!(wctx)
 
     visible = lift(
       wctx[:segment_on],
-      wctx[:active_index],
+      wctx[:focused],
     ) do pen, active
       return pen && active == index
     end

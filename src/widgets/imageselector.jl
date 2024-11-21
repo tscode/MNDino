@@ -5,39 +5,25 @@ Widget for the graphical selection of images from the project repository.
 struct ImageSelectorWidget <: Widget
   title::String
   selected::Int
-  provider::Symbol
+  store_provider::Symbol
 end
 
-function ImageSelectorWidget(title; provider, selected = 1)
-  return ImageSelectorWidget(title, selected, provider)
+function ImageSelectorWidget(title; store_provider, selected = 1)
+  return ImageSelectorWidget(title, selected, store_provider)
 end
 
 function initcontext(widget::ImageSelectorWidget, ctx)
   wctx = Dict{Union{Symbol, Int}, Any}()
 
-  loadentries!(wctx, widget, [:provider], obs = false)
+  loadentries!(wctx, widget, [:store_provider], obs = false)
   loadentries!(wctx, widget, [:title, :selected], obs = true)
-  loadentries!(wctx, ctx, wctx[:provider], [:entries])
 
-  wctx[:paths] = lift(entries -> location.(entries), wctx[:entries])
-  wctx[:nimages] = lift(length, wctx[:paths])
+  store = loadcontext(ctx, wctx[:store_provider])
 
-  # loadentries!(wctx, ctx, [:paths, :nimages])
-
-  # Keep selection index updated if paths change
-  on(wctx[:paths]) do paths
-    sel = findfirst(isequal(wctx[:path][]), paths)
-    wctx[:selected][] = isnothing(sel) ? 1 : sel
-    return
-  end
-
-  wctx[:path] = lift(
-    wctx[:paths],
-    wctx[:selected]
-  ) do paths, sel
-    return paths[sel]
-  end
-  wctx[:image] = lift(loadimagefile, wctx[:path])
+  wctx[:paths] = lift(entries -> location.(entries), store[:entries])
+  wctx[:path] = lift(location, store[:entry])
+  wctx[:image] = lift(imagefile, store[:entry])
+  wctx[:nimages] = lift(length, store[:entries])
 
   wctx[:meta] = lift(wctx[:image]) do image
     map(1:nchannels(image)) do index
@@ -49,6 +35,14 @@ function initcontext(widget::ImageSelectorWidget, ctx)
   wctx[:nchannels] = lift(nchannels, wctx[:image])
   wctx[:size] = lift(m -> m[1].size[1:2], wctx[:meta])
 
+   # This should be modified to modify the current store entry
+  wctx[:select] = store[:select]
+
+  onany(store[:entry], store[:entries]) do entry, entries
+    index = findfirst(isequal(entry), entries)
+    wctx[:selected][] = isnothing(index) ? 1 : index
+  end
+  
   return wctx
 end
 
@@ -158,7 +152,7 @@ function plotwidget(::ImageSelectorWidget, layout, wctx, theme)
   end
 
   on(path_menu.i_selected) do selected
-    wctx[:selected][] = selected
+    wctx[:select][] = selected
   end
 
   return

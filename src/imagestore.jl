@@ -13,8 +13,12 @@ function ImageDescriptor(id, image :: ImageFile)
   return ImageDescriptor(id, location(image), image)
 end
 
+function imagefile(entry::ImageDescriptor)
+  return entry.image
+end
+
 function location(entry::ImageDescriptor)
-  entry.path
+  return entry.path
 end
 
 """
@@ -22,17 +26,18 @@ Provides an updatable image store with an active / selected image plus the
 capacity to save metadata.
 """
 struct ImageStore <: Provider
-  entries::Vector{ImageDescriptor}
+  ids::Vector{Int}
+  paths::Vector{String}
   shelfs::Dict{Symbol, Dict}
   active::Int
 end
 
-function ImageStore(sources :: Vector{<: Union{String, ImageFile}})
-  entries = map(ImageDescriptor, eachindex(sources), sources)
+function ImageStore(paths :: Vector{String})
   return ImageStore(
-    entries,
+    collect(1:length(paths)),
+    paths,
     Dict{Symbol, Dict}(),
-    isempty(entries) ? -1 : entries[1].id,
+    isempty(paths) ? -1 : 1,
   )
 end
 
@@ -40,7 +45,9 @@ function initcontext(store::ImageStore, ctx)
   pctx = Dict{Union{Symbol, Int}, Any}()
 
   # Changing this observable will change the active images of the store.
-  pctx[:entries] = Observable(store.entries)
+  pctx[:entries] = Observable(ImageDescriptor.(store.ids, store.paths))
+  pctx[:ids] = lift(entries -> getfield.(entries, :id), pctx[:entries])
+  pctx[:paths] = lift(entries -> location.(entries), pctx[:entries])
 
   # For interal purposes
   pctx[:shelfs] = store.shelfs
@@ -48,37 +55,53 @@ function initcontext(store::ImageStore, ctx)
   # Changing this observable will try to change the active image.
   pctx[:select] = Observable(-1)
 
-  # The actual active entry. Select may change this
+  # The id of the active entry. Select may change this.
+  # Should not be listened to. Use pctx[:entry] instead.
   pctx[:active] = Observable(store.active)
 
-  # Remember the most recent active entries. For internal purposes.
+  # Remember the most recent active entry id. For internal purposes.
   pctx[:recent] = Observable(store.active)
 
   # Stores the currently active shelfs of the store. For interal purposes.
   pctx[:shelfkeys] = Symbol[]
   
   on(pctx[:select]) do select
+    println("select $select")
     if select == pctx[:active][]
       return
     elseif select == -1 # deselect
       pctx[:active][] = -1
     else # try to select an entry -- must exist
+      entries = pctx[:entries][]
       index = findfirst(entry -> entry.id == select, entries)
       if !isnothing(index)
         pctx[:active][] = select
       end
     end
+    println("active $(pctx[:active][])")
   end
 
-  pctx[:change] = Observable{Tuple}((nothing, nothing))
+  # Listen to this to get notified of changes in the entry.
+  # Happens BEFORE pctx[:change], pctx[:change_to], but AFTER pctx[:change_from]
+  pctx[:entry] = Observable{Union{Nothing, ImageDescriptor}}(nothing)
 
-  on(pctx[:active]) do active
+  # Listen to this to get notified of change events in the entry
+  pctx[:change] = Observable{Tuple}((nothing, nothing))
+  pctx[:change_from] = Observable{Union{Nothing, ImageDescriptor}}(nothing)
+  pctx[:change_to] = Observable{Union{Nothing, ImageDescriptor}}(nothing)
+
+  on(pctx[:active], update = true) do active
     entries = pctx[:entries][]
+
     index = findfirst(entry -> entry.id == active, entries)
     next = isnothing(index) ? nothing : entries[index]
     index = findfirst(entry -> entry.id == pctx[:recent][], entries)
     prev = isnothing(index) ? nothing : entries[index]
+
     pctx[:recent][] = active
+    pctx[:change_from][] = prev
+    pctx[:entry][] = next
+    pctx[:change_to][] = next
     pctx[:change][] = (next, prev)
   end
 
