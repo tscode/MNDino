@@ -64,8 +64,6 @@ function initcontext(widget::ChannelViewWidget, ctx)
     obs = true,
   )
 
-  @show typeof(wctx[:filter])
-
   loadentries!(
     wctx,
     widget,

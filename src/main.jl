@@ -31,7 +31,11 @@ function main(; wait = false)
   widget_image = ImageSelectorWidget("Image", store_provider = :store)
   widget_view = ChannelViewWidget("Channel View", store_provider = :store)
   widget_mask = ChannelViewMaskWidget(parent = :view, store_provider = :store)
-  widget_analysis = SegmentAnalysisWidget("Segment Analysis", mask_provider = :mask)
+  widget_analysis = SegmentAnalysisWidget(
+    "Segment Analysis",
+    mask_provider = :mask,
+    channel_provider = :view,
+  )
 
   addprovider!(project, :store, store)
   addprovider!(project, :project, widget_project)

@@ -6,7 +6,7 @@ using Statistics
 using Colors
 using HDF5 # Imaris support
 
-# using GLMakie
+using Observables
 using Makie
 using Makie.GridLayoutBase: Outer
 

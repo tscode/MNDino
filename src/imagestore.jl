@@ -66,7 +66,6 @@ function initcontext(store::ImageStore, ctx)
   pctx[:shelfkeys] = Symbol[]
   
   on(pctx[:select]) do select
-    println("select $select")
     if select == pctx[:active][]
       return
     elseif select == -1 # deselect
@@ -78,7 +77,6 @@ function initcontext(store::ImageStore, ctx)
         pctx[:active][] = select
       end
     end
-    println("active $(pctx[:active][])")
   end
 
   # Listen to this to get notified of changes in the entry.
