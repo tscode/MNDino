@@ -5,20 +5,20 @@ Widget for the graphical selection of images from the project repository.
 struct ImageSelectorWidget <: Widget
   title::String
   selected::Int
-  store_provider::Symbol
+  image_store::Symbol
 end
 
-function ImageSelectorWidget(title; store_provider, selected = 1)
-  return ImageSelectorWidget(title, selected, store_provider)
+function ImageSelectorWidget(title; image_store, selected = 1)
+  return ImageSelectorWidget(title, selected, image_store)
 end
 
 function initcontext(widget::ImageSelectorWidget, ctx)
   wctx = Dict{Union{Symbol, Int}, Any}()
 
-  loadentries!(wctx, widget, [:store_provider], obs = false)
+  loadentries!(wctx, widget, [:image_store], obs = false)
   loadentries!(wctx, widget, [:title, :selected], obs = true)
 
-  store = loadcontext(ctx, wctx[:store_provider])
+  store = loadcontext(ctx, wctx[:image_store])
 
   wctx[:paths] = lift(entries -> location.(entries), store[:entries])
   wctx[:path] = lift(location, store[:entry])
@@ -38,6 +38,7 @@ function initcontext(widget::ImageSelectorWidget, ctx)
    # This should be modified to modify the current store entry
   wctx[:select] = store[:select]
 
+  # This is done for letting the image selection survive saving / loading
   onany(store[:entry], store[:entries]) do entry, entries
     index = findfirst(isequal(entry), entries)
     wctx[:selected][] = isnothing(index) ? 1 : index
@@ -54,7 +55,7 @@ function plotwidget(::ImageSelectorWidget, layout, wctx, theme)
     layout[1, :],
     wctx[:title],
     font = :bold,
-    fontsize = theme[:widget_titlesize],
+    fontsize = theme[:titlesize],
     halign = :left,
   )
 
@@ -66,18 +67,18 @@ function plotwidget(::ImageSelectorWidget, layout, wctx, theme)
     label = "▲ Previous",
     tellwidth = false,
     halign = :right,
-    fontsize = theme[:widget_fontsize],
+    fontsize = theme[:fontsize],
   )
   next_file_button = Button(
     file_buttons_layout[1, 2],
     label = "▼ Next",
     halign = :left,
-    fontsize = theme[:widget_fontsize],
+    fontsize = theme[:fontsize],
   )
   Label(
     file_buttons_layout[1, 3],
     lift((i, n) -> "$i / $n", wctx[:selected], wctx[:nimages]),
-    fontsize = theme[:widget_fontsize],
+    fontsize = theme[:fontsize],
     color = :gray,
     halign = :right,
   )
@@ -85,26 +86,26 @@ function plotwidget(::ImageSelectorWidget, layout, wctx, theme)
   Label(
     layout[2, 1],
     "File:",
-    fontsize = theme[:widget_fontsize],
+    fontsize = theme[:fontsize],
     halign = :right,
   )
   path_menu = Menu(
     layout[2, 2],
     options = wctx[:paths],
     default = wctx[:path][],
-    fontsize = theme[:widget_fontsize],
+    fontsize = theme[:fontsize],
   )
 
   Label(
     layout[3, 1],
     "Z-Layers:",
-    fontsize = theme[:widget_fontsize],
+    fontsize = theme[:fontsize],
     halign = :right,
   )
   Label(
     layout[3, 2],
     lift(string, wctx[:nzlayers]),
-    fontsize = theme[:widget_fontsize],
+    fontsize = theme[:fontsize],
     halign = :left,
     tellwidth = false,
   )
@@ -112,13 +113,13 @@ function plotwidget(::ImageSelectorWidget, layout, wctx, theme)
   Label(
     layout[4, 1],
     "Resolution:",
-    fontsize = theme[:widget_fontsize],
+    fontsize = theme[:fontsize],
     halign = :right,
   )
   Label(
     layout[4, 2],
     lift(string, wctx[:size]),
-    fontsize = theme[:widget_fontsize],
+    fontsize = theme[:fontsize],
     halign = :left,
     tellwidth = false,
   )
@@ -126,13 +127,13 @@ function plotwidget(::ImageSelectorWidget, layout, wctx, theme)
   Label(
     layout[5, 1],
     "Channels:",
-    fontsize = theme[:widget_fontsize],
+    fontsize = theme[:fontsize],
     halign = :right,
   )
   Label(
     layout[5, 2],
     lift(string, wctx[:nchannels]),
-    fontsize = theme[:widget_fontsize],
+    fontsize = theme[:fontsize],
     halign = :left,
     tellwidth = false,
   )

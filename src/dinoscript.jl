@@ -1,8 +1,12 @@
 
+"""
+Script that acts on the data from a datastore and generates outputs.
+"""
 struct DinoScript
   path::String
   doc::String
-  statistics::Vector{Pair{Symbol,String}}
+  inputs::Vector{Symbol}
+  outputs::Vector{Pair{Symbol,String}}
   f::Function
   env::Module
 end
@@ -17,10 +21,10 @@ function _generate_dinoscript_env()
   return env
 end
 
-_dino_statistic_pair(sym::Symbol) = sym => ""
-_dino_statistic_pair(str::String) = Symbol(str) => ""
-_dino_statistic_pair(t::Tuple) = Symbol(t[1]) => string(t[2])
-_dino_statistic_pair(t::Pair) = Symbol(t[1]) => string(t[2])
+_dino_output_pair(sym::Symbol) = sym => ""
+_dino_output_pair(str::String) = Symbol(str) => ""
+_dino_output_pair(t::Tuple) = Symbol(t[1]) => string(t[2])
+_dino_output_pair(t::Pair) = Symbol(t[1]) => string(t[2])
 
 _dino_result(t) = Dict([k => v for (k, v) in t])
 
@@ -36,17 +40,28 @@ function DinoScript(path::String)
     ""
   end
 
-  statistics = try
-    env.statistics
+  inputs = try
+    env.inputs
   catch _
-    error("Script '$path' does not define 'statistics'.")
+    error("Script '$path' does not define 'inputs'.")
   end
-  @show statistics
 
-  statistics = try
-    [_dino_statistic_pair(s) for s in statistics]
+  inputs = try
+    [Symbol(input) for input in inputs]
   catch _
-    error("Statistics declaration in script '$path' is malformed.")
+    error("Input declaration in script '$path' is malformed.")
+  end
+
+  outputs = try
+    env.outputs
+  catch _
+    error("Script '$path' does not define 'outputs'.")
+  end
+
+  outputs = try
+    [_dino_output_pair(s) for s in outputs]
+  catch _
+    error("Output declaration in script '$path' is malformed.")
   end
 
   f = try
@@ -55,7 +70,7 @@ function DinoScript(path::String)
     error("Script '$path' does not define 'evaluate'.")
   end
 
-  return DinoScript(path, doc, statistics, f, env)
+  return DinoScript(path, doc, inputs, outputs, f, env)
 end
 
 function (script::DinoScript)(args...)
@@ -69,10 +84,21 @@ function (script::DinoScript)(args...)
   catch
     error("Result format in script '$(script.path)' is malformed.")
   end
-  for (name, _) in script.statistics
+  for (name, _) in script.outputs
     if !haskey(result, name)
-      error("Result in script '$(script.path)' misses statistic :$name.")
+      error("Result in script '$(script.path)' misses output :$name.")
     end
   end
   return result
+end
+
+function Base.show(io::IO, ::MIME"text/plain", ds::DinoScript)
+  println(io, "DinoScript")
+  println(io, " doc: ", ds.doc)
+  println(io, " inputs: ", ds.inputs)
+  print(io, " outputs:")
+  for pair in ds.outputs
+    print(io, "\n  ", pair)
+  end
+  return
 end

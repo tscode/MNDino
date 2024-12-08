@@ -24,14 +24,14 @@ function plotwidgetframe(
   layout,
   theme;
   outer = false,
-  framepadding = theme[:widget_framepadding],
+  framepadding = theme[:framepadding],
 )
   position = outer ? layout[:, :, Outer()] : layout[:, :]
   Box(
     position,
-    color = theme[:widget_backgroundcolor],
-    strokecolor = theme[:widget_framecolor],
-    cornerradius = theme[:widget_cornerradius],
+    color = theme[:backgroundcolor],
+    strokecolor = theme[:framecolor],
+    cornerradius = theme[:cornerradius],
     alignmode = Outside(-framepadding),
   )
   return
@@ -51,8 +51,8 @@ function plotwidget(
     outer = get(options, :outer, false)
     plotwidgetframe(layout, theme; outer, kwargs...)
   end
-  rowgap!(layout, theme[:widget_rowgap])
-  colgap!(layout, theme[:widget_colgap])
+  rowgap!(layout, theme[:rowgap])
+  colgap!(layout, theme[:colgap])
 
   return plotwidget(widget, layout, wctx, theme)
 end

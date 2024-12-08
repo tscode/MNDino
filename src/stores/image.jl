@@ -22,8 +22,11 @@ function location(entry::ImageDescriptor)
 end
 
 """
-Provides an updatable image store with an active / selected image plus the
-capacity to save metadata.
+An image store.
+
+Keeps track of a number of loaded images as well as an active or selected image.
+Other providers can save permanent metadata for each image, meaning that this
+data survives the runtime.
 """
 struct ImageStore <: Provider
   ids::Vector{Int}
@@ -44,7 +47,7 @@ end
 function initcontext(store::ImageStore, ctx)
   pctx = Dict{Union{Symbol, Int}, Any}()
 
-  # Changing this observable will change the active images of the store.
+  # Changing this observable will change the images of the store.
   pctx[:entries] = Observable(ImageDescriptor.(store.ids, store.paths))
   pctx[:ids] = lift(entries -> getfield.(entries, :id), pctx[:entries])
   pctx[:paths] = lift(entries -> location.(entries), pctx[:entries])
@@ -87,6 +90,13 @@ function initcontext(store::ImageStore, ctx)
   pctx[:change] = Observable{Tuple}((nothing, nothing))
   pctx[:change_from] = Observable{Union{Nothing, ImageDescriptor}}(nothing)
   pctx[:change_to] = Observable{Union{Nothing, ImageDescriptor}}(nothing)
+
+  # Listen or notify on this observable to handle or send store-update queries
+  pctx[:update] = Observable{Union{Nothing, ImageDescriptor}}(nothing)
+
+  on(ctx[:update]) do _
+    pctx[:update][] = pctx[:entry][]
+  end
 
   on(pctx[:active], update = true) do active
     entries = pctx[:entries][]
@@ -135,6 +145,7 @@ function addshelf!(pctx, key)
   return pctx[:shelfs][key]
 end
 
+# usage example of ImageStores:
 """
 store = loadcontext(ctx, :store)
 shelf = addshelf!(store, :mystuff) # gets me a dictionary per image in store

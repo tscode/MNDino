@@ -84,6 +84,11 @@ function addprovider!(project, key, provider::Provider)
   return
 end
 
+function addprovider!(f::Function, project, key)
+  addprovider!(project, key, f())
+  return
+end
+
 function initcontext(project::Project)
   ctx = Dict{Symbol, Any}()
   ctx[:project] = project
@@ -94,6 +99,9 @@ function initcontext(project::Project)
   ctx[:theme] = Observable(project.theme)
   ctx[:channels] = Observable(project.channels)
 
+  # Happens whenever providers should update, e.g., right before saving project
+  ctx[:update] = Observable(nothing)
+
   ctx[:nimages] = lift(length, ctx[:paths])
   ctx[:nchannels] = lift(length, ctx[:channels])
   
@@ -102,6 +110,7 @@ function initcontext(project::Project)
   for (key, provider) in project.providers
     ctx[:providers][key] = initcontext(provider, ctx)
   end
+
 
   return ctx
 end
@@ -121,14 +130,14 @@ function updateproject(project, ctx)
 end
 
 """
-    runproject(project::Project, layouts; options)
+    initproject(project::Project, layouts; options)
 
 Run the project by initializing the runtime context and populating `layouts`
 with the corresponding widgets.
 
 Returns the runtime context.
 """
-function runproject(project, layouts; options)
+function initproject(project, layouts; options)
   options = Dict(options)
   layouts = Dict(layouts)
   ctx = initcontext(project)

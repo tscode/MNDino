@@ -21,12 +21,14 @@ struct ChannelViewWidget <: Widget
   filter::Filter
   channels::Vector{ChannelSpec}
   default_view::Union{View2D, Nothing}
-  store_provider::Symbol
+  image_store::Symbol
+  variable_store::Symbol
 end
 
 function ChannelViewWidget(
   title::String;
-  store_provider,
+  image_store,
+  variable_store,
   channels = [],
   filter = NoFilter(),
   default_view = nothing,
@@ -36,22 +38,20 @@ function ChannelViewWidget(
     filter,
     channels,
     default_view,
-    store_provider,
+    image_store,
+    variable_store,
   )
 end
 
 function _derive_channel_specs(image; variant = nothing)
   return map(1:nchannels(image)) do cindex
     meta = metadata(image, cindex; variant)
-    ChannelSpec(cindex, meta.name, meta.color)
+    return ChannelSpec(cindex, meta.name, meta.color)
   end
 end
 
 function _derive_default_view(image)
-  return View2D(
-    defaultzindex(image),
-    defaultvariant(image),
-  )
+  return View2D(defaultzindex(image), defaultvariant(image))
 end
 
 function initcontext(widget::ChannelViewWidget, ctx)
@@ -60,18 +60,13 @@ function initcontext(widget::ChannelViewWidget, ctx)
   loadentries!(
     wctx,
     widget,
-    [:title, :filter=>Filter, :default_view],
+    [:title, :filter => Filter, :default_view];
     obs = true,
   )
 
-  loadentries!(
-    wctx,
-    widget,
-    [:channels, :store_provider],
-    obs = false,
-  )
+  loadentries!(wctx, widget, [:channels, :image_store]; obs = false)
 
-  store = loadcontext(ctx, :store)
+  store = loadcontext(ctx, wctx[:image_store])
   shelf = addshelf!(store, :channelview)
 
   loadentries!(wctx, store, [:entry])
@@ -84,7 +79,7 @@ function initcontext(widget::ChannelViewWidget, ctx)
   wctx[:variant] = lift(getvalue(:variant), wctx[:view])
 
   wctx[:mouse_position] = Observable(Point2f(NaN, NaN))
-  wctx[:focused] = Observable(-1, ignore_equal_values = true)
+  wctx[:focused] = Observable(-1; ignore_equal_values = true)
   wctx[:reset_clipping] = Observable(nothing)
 
   # Automatically derive channels from first image if not provided
@@ -104,27 +99,18 @@ function initcontext(widget::ChannelViewWidget, ctx)
       img = wctx[:image][]
       # TODO: this is currently inefficient, since both
       # :image and :view are updated each time the path changes
-      return Float32.(imagedata(
-        img,
-        c.index,
-        view.zindex;
-        view.variant...
-      ))
+      return Float32.(imagedata(img, c.index, view.zindex; view.variant...))
     end
-    data_f = lift((f, data) -> f(data),  wctx[:filter], data)
+    data_f = lift((f, data) -> f(data), wctx[:filter], data)
 
     wctx[c.index][:data] = data_f
-    wctx[c.index][:size] = lift(
-      size,
-      data_f,
-      ignore_equal_values = true
-    )
+    wctx[c.index][:size] = lift(size, data_f; ignore_equal_values = true)
     wctx[c.index][:extrema] = lift(extrema, data_f)
 
     wctx[c.index][:crange] = Observable(wctx[c.index][:extrema][])
     wctx[c.index][:axis] = Observable{Any}(nothing)
     wctx[c.index][:mouse_value] = lift(wctx[:mouse_position]) do pos
-      _value_at(data_f[], pos)
+      return _value_at(data_f[], pos)
     end
 
     wctx[c.index][:raw] = Dict{Symbol, Any}()
@@ -138,8 +124,12 @@ function initcontext(widget::ChannelViewWidget, ctx)
   on(store[:change]) do (next, prev)
     shelf[prev.id] = View2D(wctx[:zindex][], wctx[:variant][])
     wctx[:view][] = get(shelf, next.id) do
-      _derive_default_view(imagefile(next))
+      return _derive_default_view(imagefile(next))
     end
+  end
+
+  on(store[:update]) do current
+    shelf[current.id] = View2D(wctx[:zindex][], wctx[:variant][])
   end
 
   return wctx
@@ -159,58 +149,50 @@ function _channelview_topline(layout, yindex, wctx, theme)
   layout = GridLayout(layout[yindex, :])
   Label(
     layout[1, 1],
-    wctx[:title],
+    wctx[:title];
     halign = :left,
     tellwidth = false,
     font = :bold,
-    fontsize = theme[:widget_titlesize],
+    fontsize = theme[:titlesize],
   )
 
   filter_menu = Menu(
-    layout[1, 3],
+    layout[1, 3];
     options = ["GaussFilter"], #, "MedianFilter", "LaplaceFilter"],
     default = "GaussFilter",
-    fontsize = theme[:widget_fontsize],
+    fontsize = theme[:fontsize],
     width = 100,
   )
 
-  sublayout = GridLayout(layout[1, 4], default_rowgap = 0)
-  
-  filter_slider = Slider(
-    sublayout[2, 1],
-    range = 1:5,
-    tellheight = false,
-    width = 75,
-  )
+  sublayout = GridLayout(layout[1, 4]; default_rowgap = 0)
+
+  filter_slider =
+    Slider(sublayout[2, 1]; range = 1:5, tellheight = false, width = 75)
   Label(
     sublayout[1, 1],
-    lift(r -> "radius $r", filter_slider.value),
+    lift(r -> "radius $r", filter_slider.value);
     fontsize = 12,
     padding = (0, 0, 0, 0),
     tellheight = false,
     tellwidth = false,
   )
 
-  filter_toggle = Toggle(
-    layout[1, 5],
-    height = 20,
-    width = 40,
-  )
+  filter_toggle = Toggle(layout[1, 5]; height = 20, width = 40)
   filter_indicator = Label(
     layout[1, 6],
-    "",
+    "";
     font = :bold,
-    fontsize = theme[:widget_fontsize],
+    fontsize = theme[:fontsize],
     width = 100,
     halign = :right,
     justification = :center,
   )
   reset_button = Button(
-    layout[1, 8],
+    layout[1, 8];
     label = "↺ Reset",
     halign = :right,
     font = :bold,
-    fontsize = theme[:widget_fontsize],
+    fontsize = theme[:fontsize],
   )
 
   on(reset_button.clicks) do _
@@ -221,7 +203,7 @@ function _channelview_topline(layout, yindex, wctx, theme)
     end
     wctx[:view][] = view
     set_close_to!(filter_slider, 1)
-    filter_toggle.active[] = false
+    return filter_toggle.active[] = false
   end
 
   onany(
@@ -242,7 +224,7 @@ function _channelview_topline(layout, yindex, wctx, theme)
     end
   end
 
-  on(wctx[:filter], update = true) do filter
+  on(wctx[:filter]; update = true) do filter
     if filter == NoFilter()
       filter_indicator.text[] = "FILTER OFF"
       filter_indicator.color[] = RGBf(0.3, 0.3, 0.3)
@@ -252,7 +234,7 @@ function _channelview_topline(layout, yindex, wctx, theme)
     end
     return
   end
-  
+
   return
 end
 
@@ -261,16 +243,12 @@ function _channelview_names(layout, yindex, wctx, theme)
     cindex = wctx[:channels][index].index
     name = wctx[:channels][index].name
     color = wctx[:channels][index].color
-    Box(
-      layout[yindex, index],
-      strokevisible = false,
-      color = 0.4color,
-    )
+    Box(layout[yindex, index]; strokevisible = false, color = 0.4color)
     Label(
       layout[yindex, index],
-      "C$cindex: $name",
+      "C$cindex: $name";
       font = :bold,
-      fontsize = theme[:widget_fontsize],
+      fontsize = theme[:fontsize],
       tellwidth = false,
       halign = :center,
       color = RGB(0.98, 0.98, 0.98),
@@ -291,36 +269,28 @@ function _channelview_histograms(layout, yindex, wctx, theme)
       return reshape(data, :)
     end
 
-    ax = Axis(
-      layout[yindex, index];
-      limits,
-    )
+    ax = Axis(layout[yindex, index]; limits)
     deregister_interaction!(ax, :rectanglezoom)
     deregister_interaction!(ax, :scrollzoom)
     deregister_interaction!(ax, :dragpan)
     hidedecorations!(ax)
     hidespines!(ax, :t, :l, :r)
-    hist!(
-      ax,
-      values;
-      bins = 128,
-      color = :black,
-    )
+    hist!(ax, values; bins = 128, color = :black)
     vlines!(
       ax,
-      lift(collect, wctx[index][:crange]),
+      lift(collect, wctx[index][:crange]);
       linewidth = 1.25,
       color = 0.7wctx[index][:color],
     )
     vlines!(
       ax,
-      lift(v -> [v], wctx[index][:mouse_value]),
+      lift(v -> [v], wctx[index][:mouse_value]);
       linewidth = 1,
       color = 0.6wctx[index][:color],
       alpha = 0.75,
     )
     onany(wctx[index][:data]) do _
-      reset_limits!(ax)
+      return reset_limits!(ax)
     end
     return ax
   end
@@ -331,7 +301,7 @@ end
 function _channelview_sliders(layout, yindex, wctx, theme)
   for index in 1:wctx[:nchannels]
     slider = IntervalSlider(
-      layout[yindex, index],
+      layout[yindex, index];
       range = LinRange(0, 1, 128),
       tellheight = true,
       color_inactive = RGB(0.9, 0.9, 0.9),
@@ -339,15 +309,12 @@ function _channelview_sliders(layout, yindex, wctx, theme)
       color_active_dimmed = (0.5wctx[index][:color], 0.25),
     )
     on(wctx[:reset_clipping]) do _
-      set_close_to!(slider, 0, 1)
+      return set_close_to!(slider, 0, 1)
     end
-    onany(
-      slider.interval,
-      wctx[index][:extrema]
-    ) do interval, minmax
+    onany(slider.interval, wctx[index][:extrema]) do interval, minmax
       min = (minmax[2] - minmax[1]) * interval[1] + minmax[1]
       max = (minmax[2] - minmax[1]) * interval[2] + minmax[1]
-      wctx[index][:crange][] = (min, max)
+      return wctx[index][:crange][] = (min, max)
     end
   end
   return
@@ -355,19 +322,15 @@ end
 
 function _channelview_slices(layout, yindex, wctx, theme)
   axes = map(1:wctx[:nchannels]) do index
-    Box(
-      layout[yindex, index],
-      color = (:black, 0.05),
-      strokevisible = false,
-    )
+    Box(layout[yindex, index]; color = (:black, 0.05), strokevisible = false)
     ax = Axis(
-      layout[yindex, index],
+      layout[yindex, index];
       aspect = DataAspect(),
       yticklabelsvisible = index == 1,
       yticksvisible = index == 1,
-      yticklabelsize = theme[:widget_ticksize],
-      xticklabelsize = theme[:widget_ticksize],
-      panbutton=Makie.Mouse.left,
+      yticklabelsize = theme[:ticksize],
+      xticklabelsize = theme[:ticksize],
+      panbutton = Makie.Mouse.left,
     )
     Makie.deregister_interaction!(ax, :rectanglezoom)
     Makie.deregister_interaction!(ax, :dragpan)
@@ -375,12 +338,12 @@ function _channelview_slices(layout, yindex, wctx, theme)
 
     Makie.image!(
       ax,
-      wctx[index][:data],
+      wctx[index][:data];
       colorrange = wctx[index][:crange],
       colormap = [:black, wctx[index][:color]],
     )
     onany(wctx[:entry], wctx[index][:size]) do _, _
-      reset_limits!(ax)
+      return reset_limits!(ax)
     end
     wctx[index][:axis][] = ax
     return ax
@@ -390,15 +353,12 @@ function _channelview_slices(layout, yindex, wctx, theme)
 end
 
 function _channelview_mouseposition!(wctx)
-  events = [
-    MouseEventTypes.over,
-    MouseEventTypes.leftdrag,
-    MouseEventTypes.rightdrag,
-  ]
+  events =
+    [MouseEventTypes.over, MouseEventTypes.leftdrag, MouseEventTypes.rightdrag]
   for index in 1:wctx[:nchannels]
     ax = wctx[index][:axis][]
     register_interaction!(ax, :channelview) do event::MouseEvent, ax
-      if event.type in events 
+      if event.type in events
         wctx[:mouse_position][] = event.data
         wctx[:focused][] = index
       elseif event.type == MouseEventTypes.out
@@ -414,18 +374,18 @@ function _channelview_values(layout, yindex, wctx, theme)
   for index in 1:wctx[:nchannels]
     Label(
       layout[yindex, index],
-      lift(v -> string(round(v[1])), wctx[index][:extrema]),
+      lift(v -> string(round(v[1])), wctx[index][:extrema]);
       color = (:black, 0.75),
       halign = :left,
-      fontsize = theme[:widget_ticksize],
+      fontsize = theme[:ticksize],
       tellwidth = false,
     )
     Label(
       layout[yindex, index],
-      lift(v -> string(round(v[2])), wctx[index][:extrema]),
+      lift(v -> string(round(v[2])), wctx[index][:extrema]);
       color = (:black, 0.75),
       halign = :right,
-      fontsize = theme[:widget_ticksize],
+      fontsize = theme[:ticksize],
       tellwidth = false,
     )
     value = lift(wctx[index][:mouse_value]) do val
@@ -433,10 +393,10 @@ function _channelview_values(layout, yindex, wctx, theme)
     end
     Label(
       layout[yindex, index],
-      value,
+      value;
       color = (:black, 1.0),
       halign = :center,
-      fontsize = theme[:widget_ticksize],
+      fontsize = theme[:ticksize],
       tellwidth = false,
     )
   end
@@ -444,44 +404,39 @@ function _channelview_values(layout, yindex, wctx, theme)
 end
 
 function _channelview_zselector(layout, xindex, wctx, theme)
-  sublayout = GridLayout(
-    layout[xindex:end, end],
-    5,
-    1,
-    default_rowgap = 7,
-  )
+  sublayout = GridLayout(layout[xindex:end, end], 5, 1; default_rowgap = 7)
   rowgap!(sublayout, 4, 3)
   colsize!(sublayout, 1, 25)
   Label(
     sublayout[1, 1],
-    "z-index",
+    "z-index";
     rotation = -90 / 180 * pi,
-    fontsize = theme[:widget_ticksize],
+    fontsize = theme[:ticksize],
   )
   Label(
     sublayout[2, 1],
-    lift(string, wctx[:zindex]),
+    lift(string, wctx[:zindex]);
     rotation = -90 / 180 * pi,
     # color = :darkgray,
-    fontsize = theme[:widget_fontsize],
+    fontsize = theme[:fontsize],
   )
   slider = Slider(
-    sublayout[3, 1],
+    sublayout[3, 1];
     horizontal = false,
     range = lift(nz -> 1:nz, wctx[:nzlayers]),
     startvalue = wctx[:zindex][],
   )
   up_button = Button(
-    sublayout[4, 1],
+    sublayout[4, 1];
     label = "▲",
     padding = (6, 6, 4, 4),
-    fontsize = theme[:widget_fontsize],
+    fontsize = theme[:fontsize],
   )
   down_button = Button(
-    sublayout[5, 1],
+    sublayout[5, 1];
     label = "▼",
     padding = (6, 6, 4, 4),
-    fontsize = theme[:widget_fontsize],
+    fontsize = theme[:fontsize],
   )
   on(slider.value) do zindex
     if wctx[:view][].zindex != zindex
@@ -489,10 +444,10 @@ function _channelview_zselector(layout, xindex, wctx, theme)
     end
   end
   on(down_button.clicks) do _
-    set_close_to!(slider, slider.value[] - 1)
+    return set_close_to!(slider, slider.value[] - 1)
   end
   on(up_button.clicks) do _
-    set_close_to!(slider, slider.value[] + 1)
+    return set_close_to!(slider, slider.value[] + 1)
   end
   on(wctx[:zindex]) do zindex
     if zindex != slider.value

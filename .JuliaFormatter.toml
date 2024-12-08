@@ -1,0 +1,14 @@
+indent = 2
+margin = 80
+style = "default"
+
+always_for_in = true
+whitespace_typedefs = true
+whitespace_ops_in_indices = true
+short_to_long_function_def = true
+remove_extra_newlines = true
+import_to_using = true
+conditional_to_if = true
+joint_lines_based_on_source = true
+separate_kwargs_with_semicolon = true
+always_use_return = true

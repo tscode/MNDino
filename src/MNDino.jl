@@ -73,16 +73,19 @@ include("filter.jl")
 include("provider.jl")
 include("widget.jl")
 include("project.jl")
+include("dinoscript.jl")
 
-# providers
-include("imagestore.jl")
+# store providers
+include("stores/image.jl")
+include("stores/data.jl")
 
 # widgets
 include("widgets/project.jl")
 include("widgets/imageselector.jl")
 include("widgets/channelview.jl")
 include("widgets/channelviewmask.jl")
-include("widgets/segmentanalysis.jl")
+include("widgets/segments.jl")
+include("widgets/analysis.jl")
 
 # --- For efficient compilation of apps --- #
 # include("precompile.jl")

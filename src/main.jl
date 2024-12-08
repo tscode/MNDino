@@ -2,54 +2,37 @@
 
 using GLMakie
 
-function main(; wait = false)
-
-  paths = [
-    "data/H2bub488_MDC1568_POLS5647_mnbody27_2024-11-01.ims",
-    "data/h4k20me1488_MDC1568_POLS5647_mnbody50_2024-11-01.ims",
-  ]
-
-  theme = Dict(
-    :widget_titlesize => 16,
-    :widget_fontsize => 12,
-    :widget_ticksize => 10,
-    :widget_backgroundcolor => :white,
-    :widget_framecolor => :gray,
-    :widget_framepadding => 15,
-    :widget_cornerradius => 6,
-    :widget_rowgap => 7,
-    :widget_colgap => 10,
+function default_theme()
+  return Dict(
+    :titlesize => 16,
+    :fontsize => 12,
+    :ticksize => 10,
+    :backgroundcolor => :white,
+    :framecolor => :gray,
+    :framepadding => 15,
+    :cornerradius => 6,
+    :rowgap => 7,
+    :colgap => 10,
     :color_button_down => Makie.COLOR_ACCENT[],
     :color_button_up => RGBf(0.94, 0.94, 0.94),
   )
+end
 
-  project = Project("TEST", paths, theme = theme)
+function default_paths()
+  return [
+    "data/H2bub488_MDC1568_POLS5647_mnbody27_2024-11-01.ims",
+    "data/h4k20me1488_MDC1568_POLS5647_mnbody50_2024-11-01.ims",
+  ]
+end
 
-  store = ImageStore(paths)
-
-  widget_project = ProjectWidget("Project")
-  widget_image = ImageSelectorWidget("Image", store_provider = :store)
-  widget_view = ChannelViewWidget("Channel View", store_provider = :store)
-  widget_mask = ChannelViewMaskWidget(parent = :view, store_provider = :store)
-  widget_analysis = SegmentAnalysisWidget(
-    "Segment Analysis",
-    mask_provider = :mask,
-    channel_provider = :view,
+function runproject(project :: Project; wait = false)
+  fig = Figure(
+    size = (1200, 800),
+    backgroundcolor = :lightgray,
   )
 
-  addprovider!(project, :store, store)
-  addprovider!(project, :project, widget_project)
-  addprovider!(project, :image, widget_image)
-  addprovider!(project, :view, widget_view)
-  addprovider!(project, :mask, widget_mask)
-  addprovider!(project, :analysis, widget_analysis)
-
-  ctx = initcontext(project)
-
-  fig = Figure(size = (1000, 800), backgroundcolor = :lightgray)
-
-  layout_project = GridLayout(fig[1,1], alignmode = Outside(15))
-  layout_image = GridLayout(fig[1,2], alignmode = Outside(15))
+  layout_project = GridLayout(fig[1,1], alignmode = Outside(15), valign = :top)
+  layout_image = GridLayout(fig[1,2], alignmode = Outside(15), valign = :top)
   layout_view_mask =  GridLayout(fig[2,1:2], 1, 2)
 
   colgap!(layout_view_mask, 1, 5)
@@ -69,15 +52,23 @@ function main(; wait = false)
     fig[3, :], alignmode = Outside(15)
   )
 
+  # GridLayout(fig[4, :]) # move other widgets up in frame
+  rowgap!(fig.layout, 1, 110)
+  rowgap!(fig.layout, 2, 110)
+
   layouts = (
     :project => layout_project,
-    :image => layout_image,
+    :selector => layout_image,
     :view => layout_view,
     :mask => layout_mask,
     :analysis => layout_analysis,
   )
 
-  runproject(project, layouts; options = (:mask => (framepadding = 5,)))
+  ctx = initproject(
+    project,
+    layouts;
+    options = (:mask => (framepadding = 5,))
+  )
 
   screen = display(fig)
   if wait
@@ -85,5 +76,64 @@ function main(; wait = false)
   end
 
   return ctx
+end
+
+
+function main(;
+  name = "MNDino Project",
+  theme = default_theme(),
+  paths = default_paths(),
+  wait = true,
+)
+  project = Project(name, paths, theme = theme)
+
+  addprovider!(project, :images) do 
+    ImageStore(paths)
+  end
+
+  addprovider!(project, :variables) do 
+    VariableStore()
+  end
+
+  addprovider!(project, :project) do 
+    ProjectWidget("Project")
+  end
+
+  addprovider!(project, :selector) do 
+    ImageSelectorWidget("Image", image_store = :images)
+  end
+
+  addprovider!(project, :view) do
+    ChannelViewWidget(
+      "Channel View",
+      image_store = :images,
+      variable_store = :variables
+    )
+  end
+
+  addprovider!(project, :mask) do
+    ChannelViewMaskWidget(
+      parent = :view,
+      image_store = :images,
+      variable_store = :variables,
+    )
+  end
+
+  addprovider!(project, :analysis) do
+    AnalysisWidget(
+      "Analysis",
+      variable_store = :variables,
+    )
+  end
+
+  # addprovider!(project, :analysis) do
+  #   SegmentsWidget(
+  #     "Segment Analysis",
+  #     mask_provider = :mask,
+  #     channel_provider = :view,
+  #   )
+  # end
+
+  return runproject(project; wait)
 end
 
