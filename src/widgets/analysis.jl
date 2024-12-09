@@ -10,14 +10,6 @@ function AnalysisWidget(title; variable_store)
   return AnalysisWidget(title, "", variable_store)
 end
 
-# function _analysis_data_loaded(inputs, pctxs)
-#   return all(eachindex(pctxs)) do pindex
-#     all(pctxs[pindex][:data_keys]) do key
-#       haskey(inputs[pindex], key)
-#     end
-#   end
-# end
-
 function initcontext(widget::AnalysisWidget, ctx)
   wctx = Dict{Union{Symbol, Int}, Any}()
 
@@ -254,7 +246,7 @@ function _analysis_entries(layout, wctx, theme)
   xoffset = 2
   index = 0
 
-  for yindex in 1:2, xindex in 1:3
+  for yindex in 1:3, xindex in 1:4
     index += 1
     Label(
       layout[xindex + xoffset, (yindex - 1) * 4 + 1],
@@ -266,7 +258,7 @@ function _analysis_entries(layout, wctx, theme)
       layout[xindex + xoffset, (yindex - 1) * 4 + 2],
       " ";
       fontsize = theme[:fontsize],
-      halign = :right,
+      halign = :left,
     )
     Label(
       layout[xindex + xoffset, (yindex - 1) * 4 + 3],
@@ -314,7 +306,7 @@ function _analysis_entries(layout, wctx, theme)
   return
 end
 
-gridlayoutoptions(::AnalysisWidget, wctx) = (size = (5, 8),)
+gridlayoutoptions(::AnalysisWidget, wctx) = (size = (7, 12),)
 
 function plotwidget(::AnalysisWidget, layout, wctx, theme)
   _analysis_topline(layout, wctx, theme)

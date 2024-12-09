@@ -18,7 +18,7 @@ function initcontext(widget::ProjectWidget, ctx)
   return wctx
 end
 
-gridlayoutoptions(::ProjectWidget, wctx) = (size = (4, 2),)
+gridlayoutoptions(::ProjectWidget, wctx) = (size = (5, 2),)
 
 function plotwidget(::ProjectWidget, layout, wctx, theme)
   rowgap!(layout, 2, 10)

@@ -44,23 +44,32 @@ function runproject(project :: Project; wait = false)
 
   layout_mask = GridLayout(
     layout_view_mask[1,2],
-    alignmode = Outside(5, 15, 0, 0),
+    alignmode = Outside(5, 10, 0, 0),
     tellheight = false
   )
 
-  layout_analysis = GridLayout(
-    fig[3, :], alignmode = Outside(15)
+  layout_segments_analysis = GridLayout(fig[3, 1:2], 1, 2)
+
+  layout_segments = GridLayout(
+    layout_segments_analysis[1,1],
+    alignmode = Outside(15)
   )
 
-  # GridLayout(fig[4, :]) # move other widgets up in frame
-  rowgap!(fig.layout, 1, 110)
-  rowgap!(fig.layout, 2, 110)
+  layout_analysis = GridLayout(
+    layout_segments_analysis[1,2],
+    alignmode = Outside(15),
+    valign = :top,
+  )
+
+  # rowgap!(fig.layout, 1, 110)
+  # rowgap!(fig.layout, 2, 110)
 
   layouts = (
     :project => layout_project,
     :selector => layout_image,
     :view => layout_view,
     :mask => layout_mask,
+    :segments => layout_segments,
     :analysis => layout_analysis,
   )
 
@@ -119,20 +128,19 @@ function main(;
     )
   end
 
+  addprovider!(project, :segments) do
+    SegmentsWidget(
+      "Segments",
+      segment_provider = :mask,
+    )
+  end
+
   addprovider!(project, :analysis) do
     AnalysisWidget(
       "Analysis",
       variable_store = :variables,
     )
   end
-
-  # addprovider!(project, :analysis) do
-  #   SegmentsWidget(
-  #     "Segment Analysis",
-  #     mask_provider = :mask,
-  #     channel_provider = :view,
-  #   )
-  # end
 
   return runproject(project; wait)
 end

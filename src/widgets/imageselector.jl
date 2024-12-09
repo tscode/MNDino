@@ -38,7 +38,7 @@ function initcontext(widget::ImageSelectorWidget, ctx)
    # This should be modified to modify the current store entry
   wctx[:select] = store[:select]
 
-  # This is done for letting the image selection survive saving / loading
+  # This is done for letting the current image selection survive saving / loading
   onany(store[:entry], store[:entries]) do entry, entries
     index = findfirst(isequal(entry), entries)
     wctx[:selected][] = isnothing(index) ? 1 : index
