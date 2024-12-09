@@ -8,13 +8,14 @@ employed by `AnalysisWidget`.
 """
 struct VariableStore <: Provider end
 
-function addvariable!(dsctx, key, obs)
-  if haskey(vsctx, key)
+function addvariable!(vars, key, obs)
+  key = key isa String ? Symbol(key) : key
+  if haskey(vars, key)
     @error """
     The variable :$key is already defined.
     """
   else
-    vsctx[key] = obs
+    vars[key] = obs
   end
   return
 end

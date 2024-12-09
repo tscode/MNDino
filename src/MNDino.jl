@@ -77,7 +77,7 @@ include("dinoscript.jl")
 
 # store providers
 include("stores/image.jl")
-include("stores/data.jl")
+include("stores/variable.jl")
 
 # widgets
 include("widgets/project.jl")

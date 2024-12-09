@@ -64,8 +64,18 @@ function initcontext(widget::ChannelViewWidget, ctx)
     obs = true,
   )
 
-  loadentries!(wctx, widget, [:channels, :image_store]; obs = false)
+  loadentries!(
+    wctx,
+    widget,
+    [:channels, :image_store, :variable_store];
+    obs = false,
+  )
 
+  # Load the variable store. 2D channel views C1 to Cn will be defined.
+  vars = loadcontext(ctx, wctx[:variable_store])
+
+  # Load the image store. z-layer and variant selections for each
+  # image will be stored in the shelf
   store = loadcontext(ctx, wctx[:image_store])
   shelf = addshelf!(store, :channelview)
 
@@ -117,6 +127,8 @@ function initcontext(widget::ChannelViewWidget, ctx)
     wctx[c.index][:raw][:data] = data
     wctx[c.index][:raw][:size] = lift(size, data)
     wctx[c.index][:raw][:extrema] = lift(extrema, data)
+
+    addvariable!(vars, Symbol("C$(c.index)"), data)
   end
 
   # React if the selected image changes
@@ -129,7 +141,7 @@ function initcontext(widget::ChannelViewWidget, ctx)
   end
 
   on(store[:update]) do current
-    shelf[current.id] = View2D(wctx[:zindex][], wctx[:variant][])
+    return shelf[current.id] = View2D(wctx[:zindex][], wctx[:variant][])
   end
 
   return wctx

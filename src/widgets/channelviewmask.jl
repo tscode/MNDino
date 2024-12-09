@@ -18,7 +18,20 @@ function initcontext(widget::ChannelViewMaskWidget, ctx)
   wctx = Dict{Union{Int, Symbol}, Any}()
 
   loadentries!(wctx, widget, [:title]; obs = true)
-  loadentries!(wctx, widget, [:parent, :image_store]; obs = false)
+  loadentries!(
+    wctx,
+    widget,
+    [:parent, :image_store, :variable_store];
+    obs = false,
+  )
+
+  # Load the variable store. Segments (masks) S1 to Sn will be defined.
+  vars = loadcontext(ctx, wctx[:variable_store])
+
+  # Load the image store. The masks for each image will be stored
+  # in the shelf.
+  store = loadcontext(ctx, wctx[:image_store])
+  shelf = addshelf!(store, :mask)
 
   # Derive entries from the parent channel view
   cctx = loadcontext(ctx, wctx[:parent])
@@ -29,29 +42,29 @@ function initcontext(widget::ChannelViewMaskWidget, ctx)
 
   for index in 1:wctx[:nchannels]
     wctx[index] = Dict{Symbol, Any}()
-    wctx[index][:image] = cctx[index][:data]
+    wctx[index][:data] = cctx[index][:data]
     wctx[index][:axis] = cctx[index][:axis]
     wctx[index][:size] = cctx[index][:size]
     wctx[index][:color] = cctx[index][:color]
     wctx[index][:crange] = cctx[index][:crange]
     wctx[index][:name] = cctx[index][:name]
 
-    wctx[index][:data] = lift(wctx[index][:size]) do sz
+    wctx[index][:mask] = lift(wctx[index][:size]) do sz
       mask = BitMatrix(undef, sz)
       mask .= false
       return mask
     end
+
+    addvariable!(vars, "S$index", wctx[index][:mask])
   end
 
-  store = loadcontext(ctx, wctx[:image_store])
-  shelf = addshelf!(store, :mask)
 
   update_store = prev -> begin
     if !haskey(shelf, prev.id)
       shelf[prev.id] = Dict{Int, BitMatrix}()
     end
     for index in 1:wctx[:nchannels]
-      shelf[prev.id][index] = copy(wctx[index][:data][])
+      shelf[prev.id][index] = copy(wctx[index][:mask][])
     end
   end
 
@@ -61,17 +74,17 @@ function initcontext(widget::ChannelViewMaskWidget, ctx)
   load_next = next -> begin
     for index in 1:wctx[:nchannels]
       if haskey(shelf, next.id)
-        wctx[index][:data][] = shelf[next.id][index]
+        wctx[index][:mask][] = shelf[next.id][index]
       else
         sz = wctx[index][:size][]
         mask = BitMatrix(undef, sz)
         mask .= false
-        wctx[index][:data][] = mask
+        wctx[index][:mask][] = mask
       end
     end
   end
 
-  on(load_next, store[:change_to], update = true)
+  on(load_next, store[:change_to]; update = true)
 
   wctx[:pointer_on] = Observable(true)
   wctx[:mask_on] = Observable(true)
@@ -104,7 +117,7 @@ end
 function _mask_interaction!(wctx)
   for index in 1:wctx[:nchannels]
     ax = wctx[index][:axis][]
-    mask = wctx[index][:data]
+    mask = wctx[index][:mask]
     color = complement(wctx[index][:color])
     colormap = [:transparent, (color, 0.3)]
 
@@ -174,7 +187,7 @@ end
 function _pen_interaction!(wctx)
   for index in 1:wctx[:nchannels]
     ax = wctx[index][:axis][]
-    mask = wctx[index][:data]
+    mask = wctx[index][:mask]
 
     visible = lift(wctx[:pen_on], wctx[:focused]) do pen, active
       return pen && active == index
@@ -246,7 +259,7 @@ function Makie.process_interaction(
     end
 
     index = seg.wctx[:focused][]
-    data = seg.wctx[index][:image][]
+    data = seg.wctx[index][:data][]
     cmin, cmax = seg.wctx[index][:crange][]
     cdata = clamp.(data, cmin, cmax)
 
@@ -269,7 +282,7 @@ end
 function _segment_interaction!(wctx)
   for index in 1:wctx[:nchannels]
     ax = wctx[index][:axis][]
-    mask = wctx[index][:data]
+    mask = wctx[index][:mask]
 
     visible = lift(wctx[:segment_on], wctx[:focused]) do pen, active
       return pen && active == index
@@ -330,8 +343,8 @@ function _reset_interactions!(wctx)
       if event.type == MouseEventTypes.leftdoubleclick
         reset_limits!(ax)
       elseif event.type == MouseEventTypes.rightdoubleclick
-        wctx[index][:data][] .= false
-        notify(wctx[index][:data])
+        wctx[index][:mask][] .= false
+        notify(wctx[index][:mask])
       end
     end
   end

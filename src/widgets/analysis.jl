@@ -44,12 +44,14 @@ function initcontext(widget::AnalysisWidget, ctx)
 
   # React to changes of the script path
   on(wctx[:script_path]) do path
+    isnothing(path) && return
     try
       wctx[:load_error][] = nothing
       wctx[:script][] = DinoScript(path)
     catch err
-      wctx[:load_error][] = string(err)
+      wctx[:load_error][] = sprint(showerror, err)
       wctx[:script][] = nothing
+      wctx[:output][] = nothing
     end
     return
   end
@@ -86,7 +88,7 @@ function initcontext(widget::AnalysisWidget, ctx)
 
     for key in script.inputs
       inputs[key] = variables[key]
-      obsf = on(inputs[key]) do
+      obsf = on(inputs[key]) do _
         if wctx[:live][]
           notify(wctx[:evaluate])
         end
@@ -107,17 +109,22 @@ function initcontext(widget::AnalysisWidget, ctx)
   # Evaluate the script on the current input
   # async_latest: prevent evaluation requests from potentially overflowing
   on(Observables.async_latest(wctx[:evaluate])) do _
+  # on(wctx[:evaluate]) do _
     script = wctx[:script][]
     isnothing(script) && return
 
     args = Dict(key => input[] for (key, input) in inputs)
-    task = Threads.@spawn script(args...)
+    task = Threads.@spawn script(args)
     try
       wctx[:output][] = fetch(task)
       wctx[:eval_error][] = nothing
     catch err
       wctx[:output][] = nothing
-      wctx[:eval_error][] = string(err.exception)
+      if err isa TaskFailedException
+        wctx[:eval_error][] = sprint(showerror, err.task.exception)
+      else
+        wctx[:eval_error][] = sprint(showerror, err)
+      end
     end
     return
   end
@@ -164,28 +171,18 @@ function _analysis_topline(layout, wctx, theme)
     return
   end
 
+  # TODO: Export button. Will probably work by internally saving and loading the
+  # project and cycling through the images?
+
   return
 end
 
-_output_to_string(s::String) = s
-_output_to_string(v::Real) = string(Base.round(v; digits = 2))
-
-function _output_to_string(v::AbstractArray{<:AbstractFloat, D}) where {D}
-  m = round(mean(v); digits = 2)
-  s = round(std(v); digits = 2)
-  return "$m ± $s (Array, length $(length(v)))"
-end
-
-function _output_to_string(v)
-  return "output not supported ($(typeof(v)))"
-end
-
-function _analysis_scripts(layout, wctx, theme)
+function _analysis_script(layout, wctx, theme)
   layout = GridLayout(layout[2, :], 1, 3)
 
   path_label = Label(
     layout[1, 1],
-    "";
+    "No script loaded";
     color = (:black, 0.7),
     fontsize = theme[:fontsize],
   )
@@ -206,46 +203,79 @@ function _analysis_scripts(layout, wctx, theme)
     halign = :right,
   )
 
-  onerror = err -> msg_label.text[] = isnothing(err) ? "" : err
+  onerror = err -> begin
+    if isnothing(err)
+      msg_label.text[] = ""
+    elseif length(err) > 100
+      msg_label.text[] = err[1:100] * " ..."
+    else
+      msg_label.text[] = err
+    end
+  end
+
   on(onerror, wctx[:load_error])
   on(onerror, wctx[:eval_error])
+
   on(load_button.clicks) do _
     @async begin
       path = NativeFileDialog.pick_file()
-      path_label.text[] = "Script '$path' loaded"
       wctx[:script_path][] = path
     end
   end
+
+  on(wctx[:script]) do script
+    if isnothing(script)
+      path_label.text[] = "No script loaded"
+    else
+      path = wctx[:script_path][]
+      path_label.text[] = "Script: $path"
+    end
+  end
+  
+end
+
+
+_output_to_string(s::String) = s
+_output_to_string(v::Real) = string(Base.round(v; digits = 2))
+
+function _output_to_string(v::AbstractArray{<:AbstractFloat, D}) where {D}
+  m = round(mean(v); digits = 2)
+  s = round(std(v); digits = 2)
+  return "$m ± $s (Array, length $(length(v)))"
+end
+
+function _output_to_string(v)
+  return "output not supported ($(typeof(v)))"
 end
 
 function _analysis_entries(layout, wctx, theme)
-  # colgap!(layout, 1, 10)
-  # colgap!(layout, 3, 15)
-  # colgap!(layout, 4, 15)
   names = []
   values = []
+  xoffset = 2
+  index = 0
 
-  for xindex in 1:wctx[:ncolumns], yindex in 1:wctx[:nrows]
-    index = xindex + wctx[:nrows] * (yindex - 1)
+  for yindex in 1:2, xindex in 1:3
+    index += 1
     Label(
-      layout[xindex + 1, (yindex - 1) * 4 + 1],
+      layout[xindex + xoffset, (yindex - 1) * 4 + 1],
       "R$index:";
       fontsize = theme[:fontsize],
       font = :bold,
     )
     name = Label(
-      layout[xindex + 1, (yindex - 1) * 4 + 2];
+      layout[xindex + xoffset, (yindex - 1) * 4 + 2],
+      " ";
       fontsize = theme[:fontsize],
       halign = :right,
     )
     Label(
-      layout[xindex + 1, (yindex - 1) * 4 + 3],
+      layout[xindex + xoffset, (yindex - 1) * 4 + 3],
       "=";
       fontsize = theme[:fontsize],
     )
     value = Label(
-      layout[xindex + 1, (yindex - 1) * 4 + 4],
-      "";
+      layout[xindex + xoffset, (yindex - 1) * 4 + 4],
+      " ";
       fontsize = theme[:fontsize],
       halign = :left,
       padding = (10, 10, 5, 5),
@@ -255,22 +285,28 @@ function _analysis_entries(layout, wctx, theme)
     push!(names, name)
   end
 
+
+  # Script changes. Refresh all variable names.
   on(wctx[:script]) do script
-    for (index, name) in enumerate(script.outputs)
+    foreach(v -> v.text[] = " ", names)
+    isnothing(script) && return
+    for (index, out) in enumerate(script.outputs)
       if index < length(names)
-        names[index].text[] = string(name)
+        names[index].text[] = string(out[1])
       end
     end
   end
 
-  on(wctx[:outputs]) do outputs
-    if isnothing(outputs)
-      foreach(v -> v.text[] = "", values)
+  # Output changed. Update the displayed values.
+  on(wctx[:output]) do output
+    if isnothing(output)
+      foreach(v -> v.text[] = " ", values)
       return
     end
-    for (index, out) in enumerate(outputs)
+    script = wctx[:script][]
+    for (index, out) in enumerate(script.outputs)
       if index < length(values)
-        values[index].text[] = _output_to_string(out[2])
+        values[index].text[] = _output_to_string(output[out[1]])
       end
     end
   end
@@ -278,7 +314,7 @@ function _analysis_entries(layout, wctx, theme)
   return
 end
 
-gridlayoutoptions(::AnalysisWidget, wctx) = (size = (3, 4),)
+gridlayoutoptions(::AnalysisWidget, wctx) = (size = (5, 8),)
 
 function plotwidget(::AnalysisWidget, layout, wctx, theme)
   _analysis_topline(layout, wctx, theme)
@@ -286,7 +322,7 @@ function plotwidget(::AnalysisWidget, layout, wctx, theme)
 
   # Box(layout[2, 3]; width = 0, strokewidth = 1, strokecolor = :lightgray)
 
-  # _analysis_entries(layout, wctx, theme)
+  _analysis_entries(layout, wctx, theme)
 
   # rowgap!(layout, 1, 15)
   # colgap!(layout, 2, 30)
