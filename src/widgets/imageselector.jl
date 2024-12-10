@@ -152,6 +152,7 @@ function plotwidget(::ImageSelectorWidget, layout, wctx, theme)
     end
   end
 
+  # TODO: this is not good. wctx[:select] requires an image id, not a relative position
   on(path_menu.i_selected) do selected
     wctx[:select][] = selected
   end

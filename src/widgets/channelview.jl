@@ -84,7 +84,11 @@ function initcontext(widget::ChannelViewWidget, ctx)
   wctx[:image] = lift(imagefile, wctx[:entry])
   wctx[:nzlayers] = lift(nzlayers, wctx[:image])
 
-  wctx[:view] = Observable(_derive_default_view(wctx[:image][]))
+  wctx[:view] = Observable(
+    get(shelf, wctx[:entry][].id) do
+      return _derive_default_view(wctx[:image][])
+    end
+  )
   wctx[:zindex] = lift(getvalue(:zindex), wctx[:view])
   wctx[:variant] = lift(getvalue(:variant), wctx[:view])
 

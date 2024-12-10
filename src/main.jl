@@ -79,6 +79,8 @@ function runproject(project :: Project; wait = false)
     options = (:mask => (framepadding = 5,))
   )
 
+  version = pkgversion(MNDino)
+  GLMakie.activate!(title = "MNDino v$version")
   screen = display(fig)
   if wait
     Base.wait(screen)
