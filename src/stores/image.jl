@@ -21,6 +21,10 @@ function location(entry::ImageDescriptor)
   return entry.path
 end
 
+function Base.basename(entry::ImageDescriptor)
+  return basename(entry.path)
+end
+
 """
 An image store.
 

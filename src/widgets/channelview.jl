@@ -157,13 +157,24 @@ function _value_at(data, pos)
   return value
 end
 
+function _channelview_filename(layout, yindex, wctx, theme)
+  Label(
+    layout[2, :],
+    lift(basename, wctx[:entry]),
+    fontsize = theme[:fontsize],
+    color = (:black, 0.7),
+    halign = :left,
+  )
+  return
+end
+
 function _channelview_topline(layout, yindex, wctx, theme)
   layout = GridLayout(layout[yindex, :])
   Label(
     layout[1, 1],
     wctx[:title];
     halign = :left,
-    tellwidth = false,
+    tellwidth = true,
     font = :bold,
     fontsize = theme[:titlesize],
   )
@@ -466,31 +477,45 @@ function _channelview_zselector(layout, xindex, wctx, theme)
       set_close_to!(slider, zindex)
     end
   end
+
+  # Switch Z-layers by clicking up / down on the keyboard
+  on(Makie.events(layout[1, 1]).keyboardbutton) do event
+    event.action != Keyboard.press && return
+    if event.key == Keyboard.down
+      notify(down_button.clicks)
+    elseif event.key == Keyboard.up
+      notify(up_button.clicks)
+    end
+  end
+
   return
 end
 
 function gridlayoutoptions(widget::ChannelViewWidget, wctx)
   width = wctx[:nchannels] + 1
-  size = (6, width)
+  size = (7, width)
   return (size = size, outer = true)
 end
 
 function plotwidget(widget::ChannelViewWidget, layout, wctx, theme)
   _channelview_topline(layout, 1, wctx, theme)
-  _channelview_names(layout, 2, wctx, theme)
-  _channelview_sliders(layout, 3, wctx, theme)
-  _channelview_histograms(layout, 4, wctx, theme)
-  _channelview_values(layout, 5, wctx, theme)
-  _channelview_slices(layout, 6, wctx, theme)
-  _channelview_zselector(layout, 2, wctx, theme)
+
+  _channelview_filename(layout, 2, wctx, theme)
+  _channelview_topline(layout, 1, wctx, theme)
+
+  _channelview_names(layout, 3, wctx, theme)
+  _channelview_sliders(layout, 4, wctx, theme)
+  _channelview_histograms(layout, 5, wctx, theme)
+  _channelview_values(layout, 6, wctx, theme)
+  _channelview_slices(layout, 7, wctx, theme)
+  _channelview_zselector(layout, 3, wctx, theme)
   _channelview_mouseposition!(wctx)
 
-  rowsize!(layout, 4, Fixed(50))
-  rowsize!(layout, 6, Aspect(1, 1.0))
-
-  rowgap!(layout, 1, 15)
-
-  rowgap!(layout, 4, 5)
+  rowsize!(layout, 5, Fixed(50))
+  rowsize!(layout, 7, Aspect(1, 1.0))
+  rowgap!(layout, 2, 15)
   rowgap!(layout, 5, 5)
+  rowgap!(layout, 6, 5)
+
   return
 end

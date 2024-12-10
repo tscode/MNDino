@@ -156,6 +156,16 @@ function plotwidget(::ImageSelectorWidget, layout, wctx, theme)
     wctx[:select][] = selected
   end
 
+  # Switch images by clicking left / right on the keyboard
+  on(Makie.events(layout[1,1]).keyboardbutton) do event
+    event.action != Keyboard.press && return
+    if event.key == Keyboard.left
+      notify(prev_file_button.clicks)
+    elseif event.key == Keyboard.right
+      notify(next_file_button.clicks)
+    end
+  end
+
   return
 end
 
