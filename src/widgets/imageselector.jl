@@ -134,16 +134,16 @@ function plotwidget(::ImageSelectorWidget, layout, wctx, theme)
   )
 
   on(prev_file_button.clicks) do _
-    notify(wctx[:select_prev])
+    @async notify(wctx[:select_prev])
   end
 
   on(next_file_button.clicks) do _
-    notify(wctx[:select_next])
+    @async notify(wctx[:select_next])
   end
 
   on(path_menu.i_selected) do index
     if wctx[:select_index][] != index
-      wctx[:select_index][] = index
+      @async wctx[:select_index][] = index
     end
   end
 
