@@ -73,12 +73,12 @@ function plotwidget(::ProjectWidget, layout, wctx, theme)
     halign = :right,
     reset_on_defocus = true,
     placeholder = " ",
-    width = 500,
+    width = 300,
   )
 
   on(save_button.clicks) do _
     @async begin
-      path = NativeFileDialog.save_file() 
+      path = NativeFileDialog.save_file(filterlist="dino")
       old_path = wctx[:path][]
       wctx[:path][] = path
       notify(wctx[:update])

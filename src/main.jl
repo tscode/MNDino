@@ -89,13 +89,32 @@ function runproject(project :: Project; wait = false)
   return ctx
 end
 
+function welcome()
+  filterlist = "ims;dino"
+  paths = NativeFileDialog.pick_multi_file(; filterlist)
+  if isempty(paths)
+    @info "No files have been selected"
+    return
+  elseif length(paths) == 1 && splitext(paths[1])[2] == ".dino"
+    project = loadproject(paths[1])
+    @info "Project file $(paths[1]) has been loaded"
+  elseif all(p -> splitext(p)[2] == ".ims", paths)
+    project = newproject(; paths)
+    @info "New project with $(length(paths)) paths has been created"
+  else
+    project = nothing
+    @warn "Some of the provided files are not valid image files. Exiting"
+  end
 
-function main(;
+  return project
+end
+
+function newproject(;
   name = "MNDino Project",
   theme = default_theme(),
   paths = default_paths(),
-  wait = true,
 )
+
   project = Project(name, paths, theme = theme)
 
   addprovider!(project, :images) do 
@@ -145,6 +164,18 @@ function main(;
     )
   end
 
-  return runproject(project; wait)
+  return project
+end
+
+function main(; show_welcome = false, wait = true, kwargs...)
+  if show_welcome
+    project = welcome()
+  else
+    project = newproject(; kwargs...)
+  end
+  if !isnothing(project)
+    runproject(project; wait)
+  end
+  return
 end
 

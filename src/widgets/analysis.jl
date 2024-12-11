@@ -203,7 +203,7 @@ function _analysis_topline(layout, wctx, theme)
         export_msg("no script loaded", red)
         return
       end
-      path = NativeFileDialog.save_file()
+      path = NativeFileDialog.save_file(filelist="csv")
       if path == ""
         export_msg("export aborted", red)
         return
