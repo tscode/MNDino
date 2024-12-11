@@ -352,7 +352,7 @@ end
 
 function _channelview_slices(layout, yindex, wctx, theme)
   axes = map(1:wctx[:nchannels]) do index
-    Box(layout[yindex, index]; color = (:black, 0.05), strokevisible = false)
+    # Box(layout[yindex, index]; color = (:black, 0.05), strokevisible = false)
     ax = Axis(
       layout[yindex, index];
       aspect = DataAspect(),
@@ -516,8 +516,8 @@ function plotwidget(widget::ChannelViewWidget, layout, wctx, theme)
   _channelview_zselector(layout, 3, wctx, theme)
   _channelview_mouseposition!(wctx)
 
-  rowsize!(layout, 5, Fixed(50))
-  rowsize!(layout, 7, Aspect(1, 1.0))
+  rowsize!(layout, 5, Fixed(25))
+  # colsize!(layout, 1, Aspect(7, 1.0))
   rowgap!(layout, 2, 15)
   rowgap!(layout, 5, 5)
   rowgap!(layout, 6, 5)

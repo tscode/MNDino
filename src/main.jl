@@ -1,5 +1,4 @@
 
-
 using GLMakie
 
 function default_theme()
@@ -25,44 +24,33 @@ function default_paths()
   ]
 end
 
-function runproject(project :: Project; wait = false)
-  fig = Figure(
-    size = (1200, 800),
-    backgroundcolor = :lightgray,
-  )
+function runproject(project::Project; wait = false, size = (1200, 1000))
+  fig = Figure(; size, backgroundcolor = :lightgray)
 
-  layout_project = GridLayout(fig[1,1], alignmode = Outside(15), valign = :top)
-  layout_image = GridLayout(fig[1,2], alignmode = Outside(15), valign = :top)
-  layout_view_mask =  GridLayout(fig[2,1:2], 1, 2)
+  layout_project = GridLayout(fig[1, 1]; alignmode = Outside(15), valign = :top)
+  layout_image = GridLayout(fig[1, 2]; alignmode = Outside(15), valign = :top)
+  layout_view_mask = GridLayout(fig[2, 1:2], 1, 2)
 
   colgap!(layout_view_mask, 1, 5)
 
-  layout_view = GridLayout(
-    layout_view_mask[1,1],
-    alignmode = Outside(15)
-  )
+  layout_view = GridLayout(layout_view_mask[1, 1]; alignmode = Outside(15))
 
   layout_mask = GridLayout(
-    layout_view_mask[1,2],
+    layout_view_mask[1, 2];
     alignmode = Outside(5, 10, 0, 0),
-    tellheight = false
+    tellheight = false,
   )
 
   layout_segments_analysis = GridLayout(fig[3, 1:2], 1, 2)
 
-  layout_segments = GridLayout(
-    layout_segments_analysis[1,1],
-    alignmode = Outside(15)
-  )
+  layout_segments =
+    GridLayout(layout_segments_analysis[1, 1]; alignmode = Outside(15))
 
   layout_analysis = GridLayout(
-    layout_segments_analysis[1,2],
+    layout_segments_analysis[1, 2];
     alignmode = Outside(15),
     valign = :top,
   )
-
-  # rowgap!(fig.layout, 1, 110)
-  # rowgap!(fig.layout, 2, 110)
 
   layouts = (
     :project => layout_project,
@@ -73,14 +61,10 @@ function runproject(project :: Project; wait = false)
     :analysis => layout_analysis,
   )
 
-  ctx = initproject(
-    project,
-    layouts;
-    options = (:mask => (framepadding = 5,))
-  )
+  ctx = initproject(project, layouts; options = (:mask => (framepadding = 5,)))
 
   version = pkgversion(MNDino)
-  GLMakie.activate!(title = "MNDino v$version")
+  GLMakie.activate!(; title = "MNDino v$version")
   screen = display(fig)
   if wait
     Base.wait(screen)
@@ -114,35 +98,34 @@ function newproject(;
   theme = default_theme(),
   paths = default_paths(),
 )
+  project = Project(name, paths; theme = theme)
 
-  project = Project(name, paths, theme = theme)
-
-  addprovider!(project, :images) do 
-    ImageStore(paths)
+  addprovider!(project, :images) do
+    return ImageStore(paths)
   end
 
-  addprovider!(project, :variables) do 
-    VariableStore()
+  addprovider!(project, :variables) do
+    return VariableStore()
   end
 
-  addprovider!(project, :project) do 
-    ProjectWidget("Project")
+  addprovider!(project, :project) do
+    return ProjectWidget("Project")
   end
 
-  addprovider!(project, :selector) do 
-    ImageSelectorWidget("Image", image_store = :images)
+  addprovider!(project, :selector) do
+    return ImageSelectorWidget("Image"; image_store = :images)
   end
 
   addprovider!(project, :view) do
-    ChannelViewWidget(
-      "Channel View",
+    return ChannelViewWidget(
+      "Channel View";
       image_store = :images,
-      variable_store = :variables
+      variable_store = :variables,
     )
   end
 
   addprovider!(project, :mask) do
-    ChannelViewMaskWidget(
+    return ChannelViewMaskWidget(;
       parent = :view,
       image_store = :images,
       variable_store = :variables,
@@ -150,15 +133,12 @@ function newproject(;
   end
 
   addprovider!(project, :segments) do
-    SegmentsWidget(
-      "Segments",
-      segment_provider = :mask,
-    )
+    return SegmentsWidget("Segments"; segment_provider = :mask)
   end
 
   addprovider!(project, :analysis) do
-    AnalysisWidget(
-      "Analysis",
+    return AnalysisWidget(
+      "Analysis";
       image_store = :images,
       variable_store = :variables,
     )
@@ -167,15 +147,19 @@ function newproject(;
   return project
 end
 
-function main(; show_welcome = true, wait = true, kwargs...)
+function main(;
+  show_welcome = true,
+  wait = true,
+  size = (1200, 1000),
+  kwargs...,
+)
   if show_welcome
     project = welcome()
   else
     project = newproject(; kwargs...)
   end
   if !isnothing(project)
-    runproject(project; wait)
+    runproject(project; wait, size)
   end
   return
 end
-

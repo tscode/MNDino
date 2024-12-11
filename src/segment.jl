@@ -1,2 +1,0 @@
-
-struct Segment end
