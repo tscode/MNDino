@@ -72,33 +72,44 @@ function _segments_showsegments(layout, wctx, theme)
     )
   end
 
-  elements = map(1:wctx[:nmasks]) do index
-    return MarkerElement(;
-      color = 0.8wctx[:masks][index][:color],
-      marker = :rect,
-      markersize = 20,
+  sublayout = GridLayout(layout[2, 2], 3wctx[:nmasks], 1)
+  for index in 1:wctx[:nmasks]
+    mask = wctx[:masks][index][:mask]
+    Label(
+      sublayout[3index-2, 1],
+      "S$index: " * wctx[:masks][index][:name];
+      font = :bold,
+      fontsize = theme[:fontsize],
+      color = 0.6 * wctx[:masks][index][:color],
+      halign = :left,
     )
-  end
-  labels = map(1:wctx[:nmasks]) do index
-    return "S$index: " * wctx[:masks][index][:name]
+    Label(
+      sublayout[3index-1, 1],
+      lift(m -> "pixels: " * string(count(m)), mask),
+      fontsize = theme[:ticksize],
+      color = (:black, 0.7),
+      halign = :left
+    )
+    fraction = m -> string(round(100mean(m), digits = 2))
+    Label(
+      sublayout[3index, 1],
+      lift(m -> "fraction: " * fraction(m) * "%", mask),
+      fontsize = theme[:ticksize],
+      color = (:black, 0.7),
+      halign = :left
+    )
+    rowgap!(sublayout, 3index-2, 5)
+    rowgap!(sublayout, 3index-1, 5)
   end
 
-  return Legend(
-    layout[2, 2],
-    elements,
-    labels;
-    framevisible = false,
-    valign = :top,
-    labelsize = theme[:fontsize],
-    labelfont = :bold,
-    tellwidth = true,
-  )
+  return
 end
 
-gridlayoutoptions(::SegmentsWidget, wctx) = (size = (2, 4),)
+gridlayoutoptions(::SegmentsWidget, wctx) = (size = (2, 2),)
 
 function plotwidget(::SegmentsWidget, layout, wctx, theme)
   _segments_topline(layout, wctx, theme)
   _segments_showsegments(layout, wctx, theme)
+  colgap!(layout, 15)
   return
 end
