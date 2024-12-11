@@ -23,16 +23,30 @@ gridlayoutoptions(::ProjectWidget, wctx) = (size = (5, 2),)
 function plotwidget(::ProjectWidget, layout, wctx, theme)
   rowgap!(layout, 2, 10)
 
+  toplayout = GridLayout(layout[1, :], 1, 4)
+  colgap!(toplayout, 1, 5)
+
   Label(
-    layout[1, :],
-    lift((t, n) -> "$t: $n", wctx[:title], wctx[:name]),
+    toplayout[1, 1],
+    wctx[:title],
     font = :bold,
     fontsize = theme[:titlesize],
     halign = :left,
+    tellwidth = true,
+  )
+
+  project_name = Textbox(
+    toplayout[1, 2];
+    placeholder = "project name",
+    stored_string = wctx[:name][],
+    font = :bold,
+    fontsize = theme[:titlesize],
+    halign = :left,
+    bordercolor = :transparent,
   )
 
   save_button = Button(
-    layout[1, :],
+    toplayout[1, 4],
     label = "Save...",
     halign = :right,
     fontsize = theme[:fontsize],
@@ -75,6 +89,10 @@ function plotwidget(::ProjectWidget, layout, wctx, theme)
     placeholder = " ",
     width = 300,
   )
+
+  on(project_name.stored_string) do str
+    wctx[:name][] = isnothing(str) ? "" : str
+  end
 
   on(save_button.clicks) do _
     @async begin
