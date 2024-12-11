@@ -506,9 +506,7 @@ end
 
 function plotwidget(widget::ChannelViewWidget, layout, wctx, theme)
   _channelview_topline(layout, 1, wctx, theme)
-
   _channelview_filename(layout, 2, wctx, theme)
-  _channelview_topline(layout, 1, wctx, theme)
 
   _channelview_names(layout, 3, wctx, theme)
   _channelview_sliders(layout, 4, wctx, theme)
