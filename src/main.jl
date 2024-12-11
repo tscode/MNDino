@@ -167,7 +167,7 @@ function newproject(;
   return project
 end
 
-function main(; show_welcome = false, wait = true, kwargs...)
+function main(; show_welcome = true, wait = true, kwargs...)
   if show_welcome
     project = welcome()
   else
