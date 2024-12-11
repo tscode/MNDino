@@ -84,11 +84,9 @@ function initcontext(widget::ChannelViewWidget, ctx)
   wctx[:image] = lift(imagefile, wctx[:entry])
   wctx[:nzlayers] = lift(nzlayers, wctx[:image])
 
-  wctx[:view] = Observable(
-    get(shelf, wctx[:entry][].id) do
-      return _derive_default_view(wctx[:image][])
-    end
-  )
+  wctx[:view] = Observable(get(shelf, wctx[:entry][].id) do
+    return _derive_default_view(wctx[:image][])
+  end)
   wctx[:zindex] = lift(getvalue(:zindex), wctx[:view])
   wctx[:variant] = lift(getvalue(:variant), wctx[:view])
 
@@ -109,8 +107,8 @@ function initcontext(widget::ChannelViewWidget, ctx)
   for c in wctx[:channels]
     wctx[c.index] = Dict{Symbol, Any}()
 
-    wctx[c.index][:name] = c.name
-    wctx[c.index][:color] = c.color
+    wctx[c.index][:name] = Observable(c.name)
+    wctx[c.index][:color] = Observable(c.color)
 
     data = lift(wctx[:view]) do view
       img = wctx[:image][]
@@ -136,6 +134,10 @@ function initcontext(widget::ChannelViewWidget, ctx)
     wctx[c.index][:raw][:extrema] = lift(extrema, data)
 
     addvariable!(vars, Symbol("C$(c.index)"), data)
+
+    onany(wctx[c.index][:name], wctx[c.index][:color]) do name, color
+      return wctx[:channels][c.index] = ChannelSpec(c.index, name, color)
+    end
   end
 
   # React if the selected image changes
@@ -167,7 +169,7 @@ end
 function _channelview_filename(layout, yindex, wctx, theme)
   Label(
     layout[2, :],
-    lift(basename, wctx[:entry]),
+    lift(basename, wctx[:entry]);
     fontsize = theme[:fontsize],
     color = (:black, 0.7),
     halign = :left,
@@ -271,19 +273,45 @@ end
 function _channelview_names(layout, yindex, wctx, theme)
   for index in 1:wctx[:nchannels]
     cindex = wctx[:channels][index].index
-    name = wctx[:channels][index].name
-    color = wctx[:channels][index].color
-    Box(layout[yindex, index]; strokevisible = false, color = 0.4color)
+    name = wctx[index][:name]
+    color = wctx[index][:color]
+    Box(
+      layout[yindex, index];
+      strokevisible = false,
+      color = lift(c -> 0.4c, color),
+    )
+    sublayout = GridLayout(layout[yindex, index], 1, 4)
+    colgap!(sublayout, 2, 0)
     Label(
-      layout[yindex, index],
-      "C$cindex: $name";
+      sublayout[1, 2],
+      "C$cindex:";
       font = :bold,
-      fontsize = theme[:fontsize],
-      tellwidth = false,
-      halign = :center,
+      fontsize = theme[:fontsize] + 1,
+      halign = :right,
       color = RGB(0.98, 0.98, 0.98),
       padding = (0, 0, 5, 5),
     )
+    name_textbox = Textbox(
+      sublayout[1, 3];
+      stored_string = name,
+      font = :bold,
+      fontsize = theme[:fontsize] + 1,
+      halign = :left,
+      bordercolor = :transparent,
+      bordercolor_hover = :transparent,
+      bordercolor_focused = :transparent,
+      boxcolor_focused = (:white, 0.2),
+      cursorcolor = :transparent,
+      textcolor = RGB(0.98, 0.98, 0.98),
+      textpadding = (5, 5, 4, 4),
+      cornerradius = 0,
+      # padding = (0, 0, 5, 5),
+    )
+    on(name_textbox.stored_string) do name
+      if wctx[index][:name][] != name
+        wctx[index][:name][] = name
+      end
+    end
   end
   return
 end
@@ -310,13 +338,13 @@ function _channelview_histograms(layout, yindex, wctx, theme)
       ax,
       lift(collect, wctx[index][:crange]);
       linewidth = 1.25,
-      color = 0.7wctx[index][:color],
+      color = lift(c -> 0.7c, wctx[index][:color]),
     )
     vlines!(
       ax,
       lift(v -> [v], wctx[index][:mouse_value]);
       linewidth = 1,
-      color = 0.6wctx[index][:color],
+      color = lift(c -> 0.6c, wctx[index][:color]),
       alpha = 0.75,
     )
     onany(wctx[index][:data]) do _
@@ -335,8 +363,8 @@ function _channelview_sliders(layout, yindex, wctx, theme)
       range = LinRange(0, 1, 128),
       tellheight = true,
       color_inactive = RGB(0.9, 0.9, 0.9),
-      color_active = 0.5wctx[index][:color],
-      color_active_dimmed = (0.5wctx[index][:color], 0.25),
+      color_active = lift(c -> 0.5c, wctx[index][:color]),
+      color_active_dimmed = lift(c -> (0.5c, 0.25), wctx[index][:color]),
     )
     on(wctx[:reset_clipping]) do _
       return set_close_to!(slider, 0, 1)
@@ -370,7 +398,7 @@ function _channelview_slices(layout, yindex, wctx, theme)
       ax,
       wctx[index][:data];
       colorrange = wctx[index][:crange],
-      colormap = [:black, wctx[index][:color]],
+      colormap = lift(c -> [:black, c], wctx[index][:color]),
     )
     onany(wctx[:entry], wctx[index][:size]) do _, _
       return reset_limits!(ax)

@@ -118,8 +118,8 @@ function _mask_interaction!(wctx)
   for index in 1:wctx[:nchannels]
     ax = wctx[index][:axis][]
     mask = wctx[index][:mask]
-    color = complement(wctx[index][:color])
-    colormap = [:transparent, (color, 0.3)]
+    color = lift(complement, wctx[index][:color])
+    colormap = lift(c -> [:transparent, (c, 0.3)], color)
 
     Makie.image!(
       ax,
@@ -296,7 +296,7 @@ function _segment_interaction!(wctx)
       marker = :star4,
       markersize = 12,
       strokewidth = 0.5,
-      color = complement(wctx[index][:color]),
+      color = lift(complement, wctx[index][:color]),
       strokecolor = :black,
     )
 

@@ -68,7 +68,10 @@ function _segments_showsegments(layout, wctx, theme)
       ax,
       wctx[:masks][index][:mask];
       colorrange = (0.0, 1.0),
-      colormap = [(:black, 0.01), (0.8wctx[:masks][index][:color], 0.5)],
+      colormap = lift(
+        c -> [(:black, 0.01), (0.8c, 0.5)],
+        wctx[:masks][index][:color],
+      ),
     )
   end
 
@@ -76,30 +79,30 @@ function _segments_showsegments(layout, wctx, theme)
   for index in 1:wctx[:nmasks]
     mask = wctx[:masks][index][:mask]
     Label(
-      sublayout[3index-2, 1],
-      "S$index: " * wctx[:masks][index][:name];
+      sublayout[3index - 2, 1],
+      lift(n -> "S$index: " * n, wctx[:masks][index][:name]);
       font = :bold,
       fontsize = theme[:fontsize],
-      color = 0.6 * wctx[:masks][index][:color],
+      color = lift(c -> 0.6c, wctx[:masks][index][:color]),
       halign = :left,
     )
     Label(
-      sublayout[3index-1, 1],
-      lift(m -> "pixels: " * string(count(m)), mask),
+      sublayout[3index - 1, 1],
+      lift(m -> "pixels: " * string(count(m)), mask);
       fontsize = theme[:ticksize],
       color = (:black, 0.7),
-      halign = :left
+      halign = :left,
     )
-    fraction = m -> string(round(100mean(m), digits = 2))
+    fraction = m -> string(round(100mean(m); digits = 2))
     Label(
       sublayout[3index, 1],
-      lift(m -> "fraction: " * fraction(m) * "%", mask),
+      lift(m -> "fraction: " * fraction(m) * "%", mask);
       fontsize = theme[:ticksize],
       color = (:black, 0.7),
-      halign = :left
+      halign = :left,
     )
-    rowgap!(sublayout, 3index-2, 5)
-    rowgap!(sublayout, 3index-1, 5)
+    rowgap!(sublayout, 3index - 2, 5)
+    rowgap!(sublayout, 3index - 1, 5)
   end
 
   return
