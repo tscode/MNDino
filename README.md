@@ -14,9 +14,9 @@ Pkg.add("https://gitlab.gwdg.de/staudt1/mndino.git")
 A julia version 1.9 or higher is strongly recommended. You can get julia from [here](https://julialang.org/downloads/).
 
 ## Usage
-At the moment (as of version `v0.1`), only one GUI layout is included in MNDino. This layout can be accessed via `MNDino.main()`. A window will ask for image files (e.g., `.ims`) or an MNDino project file (`.dino`). Ideally, you start a julia environment with at least two threads (i.e., run `julia -t2`).
+At the moment (as of version *v0.1*), only one GUI layout is included in MNDino. This layout can be accessed via `MNDino.main()`. A window will ask for image files (e.g., *.ims*) or an MNDino project file (*.dino*). Ideally, you start a julia environment with at least two threads (i.e., run `julia -t2`).
 
-After loading some files, you will be greeted by a user interface with several widgets. While most interaction options should be transparent, the following hints might help. They apply to version `v0.1` and are probably subject to future change.
+After loading some files, you will be greeted by a user interface with several widgets. While most interaction options should be transparent, the following hints might help. They apply to version *v0.1* and are probably subject to future change.
 
 #### Generic navigation
 * The *left* / *right* keyboard arrow keys can be used to switch images.
@@ -32,6 +32,7 @@ After loading some files, you will be greeted by a user interface with several w
 * When this tool is activated, drag-and-dropping from a start point A to an end point B will create an automatic segmentation that seperates A from B. 
 * The region corresponding to the A-segment will be added to the current mask.
 * Typically, A will therefore be placed on a feature while B will be placed on the background you want to seperate the feature from.
+* Scrolling while in the segmentation tool will grow or shrink the masks in the image under the mouse cursor. 
 
 #### Variables
 * Different widgets can load different quantities in a variable store that operates in the background.
@@ -40,7 +41,7 @@ After loading some files, you will be greeted by a user interface with several w
 
 #### Analyzing and scripts
 * In order to quantitatively analyze your images, you can load scripts into MNDino. 
-* A script is a julia file that defines a set of *input variables*, a set of *output variables*, and an evaluation function. The input variables have to be made accessible by other widgets.
+* A script is a julia file that defines a set of *input variables*, a set of *output variables*, and an *evaluation function*. The input variables have to be made accessible by other widgets.
 
 The following is a simple example:
 ```julia
@@ -48,11 +49,11 @@ The following is a simple example:
 inputs = (:C1, :C2, :S1)
 
 # We declare the following outputs from our script.
-# We add some documentation to clarify what the outputs refere to.
+# We add some documentation to clarify what the outputs refer to.
 outputs = (
   meanC1 => "The mean value of channel C1",
   meanC1S1 => "The mean value of channel C1 restricted to S1"
-  medianC2S1 => "The mean of C2 weighted by C1 restricted to S1"
+  meanC2S1 => "The mean of C2 weighted by C1 restricted to S1"
 )
 
 # Here, we implement the actual computations that generate our outputs
