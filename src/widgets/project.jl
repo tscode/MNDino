@@ -28,7 +28,7 @@ function plotwidget(::ProjectWidget, layout, wctx, theme)
 
   Label(
     toplayout[1, 1],
-    wctx[:title],
+    lift(t -> "$t:", wctx[:title]),
     font = :bold,
     fontsize = theme[:titlesize],
     halign = :left,
@@ -67,9 +67,12 @@ function plotwidget(::ProjectWidget, layout, wctx, theme)
     fontsize = theme[:fontsize],
     halign = :right,
   )
+  path = lift(wctx[:path]) do path
+    length(path) > 75 ? "..." * path[end-75:end] : path
+  end
   path_label = Label(
     layout[3, 2],
-    isempty(wctx[:path][]) ? "<unsaved>" : wctx[:path][],
+    isempty(path[]) ? "<unsaved>" : path[],
     fontsize = theme[:fontsize],
     halign = :left,
   )
@@ -87,7 +90,7 @@ function plotwidget(::ProjectWidget, layout, wctx, theme)
     halign = :right,
     reset_on_defocus = true,
     placeholder = " ",
-    width = 300,
+    width = 400,
   )
 
   on(project_name.stored_string) do str

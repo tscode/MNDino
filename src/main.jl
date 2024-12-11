@@ -74,7 +74,7 @@ function runproject(project::Project; wait = false, size = (1200, 1000))
 end
 
 function welcome()
-  filterlist = "ims;dino"
+  filterlist = "ims,dino"
   paths = NativeFileDialog.pick_multi_file(; filterlist)
   if isempty(paths)
     @info "No files have been selected"

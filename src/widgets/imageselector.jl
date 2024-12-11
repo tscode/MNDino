@@ -86,8 +86,8 @@ function plotwidget(::ImageSelectorWidget, layout, wctx, theme)
   )
   path_menu = Menu(
     layout[2, 2],
-    options = wctx[:paths],
-    default = wctx[:path][],
+    options = lift(p -> basename.(p), wctx[:paths]),
+    default = basename(wctx[:path][]),
     fontsize = theme[:fontsize],
   )
 

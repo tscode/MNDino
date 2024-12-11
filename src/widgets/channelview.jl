@@ -281,7 +281,7 @@ function _channelview_names(layout, yindex, wctx, theme)
       color = lift(c -> 0.4c, color),
     )
     sublayout = GridLayout(layout[yindex, index], 1, 4)
-    colgap!(sublayout, 2, 0)
+    colgap!(sublayout, 2, 4)
     Label(
       sublayout[1, 2],
       "C$cindex:";
@@ -300,12 +300,12 @@ function _channelview_names(layout, yindex, wctx, theme)
       bordercolor = :transparent,
       bordercolor_hover = :transparent,
       bordercolor_focused = :transparent,
-      boxcolor_focused = (:white, 0.2),
+      boxcolor_hover = (:white, 0.1),
+      boxcolor_focused = (:white, 0.25),
       cursorcolor = :transparent,
       textcolor = RGB(0.98, 0.98, 0.98),
-      textpadding = (5, 5, 4, 4),
+      textpadding = (3, 3, 5, 5),
       cornerradius = 0,
-      # padding = (0, 0, 5, 5),
     )
     on(name_textbox.stored_string) do name
       if wctx[index][:name][] != name
