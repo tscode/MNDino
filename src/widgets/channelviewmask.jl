@@ -171,7 +171,7 @@ function Makie.process_interaction(pen::PenInteraction, event::MouseEvent, ax)
     tmp = fetch(mask_task)
     if !isnothing(tmp)
       mask .= tmp
-      @time notify(pen.mask)
+      notify(pen.mask)
     end
   end
   return

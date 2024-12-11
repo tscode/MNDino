@@ -89,8 +89,9 @@ include("widgets/channelviewmask.jl")
 include("widgets/segments.jl")
 include("widgets/analysis.jl")
 
-# --- For efficient compilation of apps --- #
-# include("precompile.jl")
 include("main.jl")
+
+# precompilation statements
+include("compilat.jl")
 
 end # module MNDino

@@ -1,0 +1,3 @@
+
+using MNDino
+MNDino.main()
