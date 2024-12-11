@@ -22,13 +22,11 @@ function initcontext(widget::AnalysisWidget, ctx)
   loadentries!(wctx, widget, [:script_path]; obs = true)
 
   vars = loadcontext(ctx, wctx[:variable_store])
-  store = loadcontext(ctx, wctx[:image_store])
 
-  wctx[:load_error] = Observable{Union{String, Nothing}}(nothing)
-  wctx[:eval_error] = Observable{Union{String, Nothing}}(nothing)
+  wctx[:script_error] = Observable{Union{String, Nothing}}(nothing)
 
   wctx[:script] = Observable{Union{DinoScript, Nothing}}(nothing)
-  wctx[:output] = Observable{Union{Dict, Nothing}}(nothing)
+  wctx[:outputs] = Observable{Union{Dict, Nothing}}(nothing)
 
   # Notifying will trigger evaluation and store the result in output
   wctx[:evaluate] = Observable(nothing)
@@ -59,12 +57,11 @@ function initcontext(widget::AnalysisWidget, ctx)
   on(wctx[:script_path]) do path
     isnothing(path) && return
     try
-      wctx[:load_error][] = nothing
       wctx[:script][] = DinoScript(path)
     catch err
-      wctx[:load_error][] = sprint(showerror, err)
+      wctx[:script_error][] = sprint(showerror, err)
       wctx[:script][] = nothing
-      wctx[:output][] = nothing
+      wctx[:outputs][] = nothing
     end
     return
   end
@@ -72,11 +69,11 @@ function initcontext(widget::AnalysisWidget, ctx)
   # Check if the number of outputs can be displayed
   on(wctx[:script]; update = true) do script
     isnothing(script) && return
-    if length(script.outputs) > 6
+    if length(script.outputs) > 15
       @warn """
-      Analysis widget cannot display more than 6 outputs. 
+      Analysis widget cannot display more than 15 outputs. 
       """
-      wctx[:load_error][] = "Cannot display more than 6 outputs."
+      wctx[:script_error][] = "Cannot display more than 15 outputs."
     end
     return
   end
@@ -93,7 +90,7 @@ function initcontext(widget::AnalysisWidget, ctx)
 
     for key in script.inputs
       if !haskey(vars, key)
-        wctx[:load_error][] = "Requested variable $key does not exist."
+        wctx[:script_error][] = "Requested variable $key does not exist."
         wctx[:script][] = nothing
         return
       end
@@ -129,14 +126,13 @@ function initcontext(widget::AnalysisWidget, ctx)
     args = Dict(key => input[] for (key, input) in inputs)
     task = Threads.@spawn script(args)
     try
-      wctx[:output][] = fetch(task)
-      wctx[:eval_error][] = nothing
+      wctx[:outputs][] = fetch(task)
     catch err
-      wctx[:output][] = nothing
+      wctx[:outputs][] = nothing
       if err isa TaskFailedException
-        wctx[:eval_error][] = sprint(showerror, err.task.exception)
+        wctx[:script_error][] = sprint(showerror, err.task.exception)
       else
-        wctx[:eval_error][] = sprint(showerror, err)
+        wctx[:script_error][] = sprint(showerror, err)
       end
     end
     return
@@ -158,7 +154,8 @@ function _analysis_topline(layout, wctx, theme)
 
   export_label = Label(layout[1, 2], ""; fontsize = theme[:fontsize])
   Label(layout[1, 3], "Auto Update"; fontsize = theme[:fontsize])
-  live_toggle = Toggle(layout[1, 4]; height = 20, width = 40)
+  live_toggle =
+    Toggle(layout[1, 4]; height = 20, width = 40, active = wctx[:live][])
 
   update_button =
     Button(layout[1, 5]; label = "Update", fontsize = theme[:fontsize])
@@ -189,7 +186,7 @@ function _analysis_topline(layout, wctx, theme)
     @async begin
       export_label.color[] = color
       export_label.text[] = msg
-      sleep(3)
+      sleep(5)
       export_label.text[] = ""
     end
   end
@@ -203,7 +200,7 @@ function _analysis_topline(layout, wctx, theme)
         export_msg("no script loaded", red)
         return
       end
-      path = NativeFileDialog.save_file(filelist="csv")
+      path = NativeFileDialog.save_file(; filterlist = "csv")
       if path == ""
         export_msg("export aborted", red)
         return
@@ -222,9 +219,6 @@ function _analysis_topline(layout, wctx, theme)
     end
   end
 
-  # TODO: Export button. Will probably work by internally saving and loading the
-  # project and cycling through the images?
-
   return
 end
 
@@ -241,7 +235,7 @@ function _analysis_script(layout, wctx, theme)
   msg_label = Label(
     layout[1, 2],
     "";
-    color = :darkred,
+    color = RGB(0.5, 0.2, 0.2),
     tellwidth = false,
     fontsize = theme[:fontsize],
     halign = :left,
@@ -254,23 +248,24 @@ function _analysis_script(layout, wctx, theme)
     halign = :right,
   )
 
-  onerror = err -> begin
-    if isnothing(err)
+  on(wctx[:script_error]) do err
+    @async begin
+      if length(err) > 100
+        msg_label.text[] = err[1:100] * " ..."
+      else
+        msg_label.text[] = err
+      end
+      sleep(5)
       msg_label.text[] = ""
-    elseif length(err) > 100
-      msg_label.text[] = err[1:100] * " ..."
-    else
-      msg_label.text[] = err
     end
   end
-
-  on(onerror, wctx[:load_error])
-  on(onerror, wctx[:eval_error])
 
   on(load_button.clicks) do _
     @async begin
       path = NativeFileDialog.pick_file()
-      wctx[:script_path][] = path
+      if !isempty(path)
+        wctx[:script_path][] = path
+      end
     end
   end
 
@@ -297,84 +292,79 @@ function _output_to_string(v)
   return "output not supported ($(typeof(v)))"
 end
 
+function _analysis_create_entry(layout, name, index, xindex, yindex, theme)
+  output_label = Label(
+    layout[xindex, yindex],
+    "O$index:";
+    fontsize = theme[:fontsize],
+    font = :bold,
+  )
+  name_label = Label(
+    layout[xindex, yindex + 1],
+    string(name);
+    fontsize = theme[:fontsize],
+    halign = :left,
+  )
+  equal_label =
+    Label(layout[xindex, yindex + 2], "="; fontsize = theme[:fontsize])
+  value_label = Label(
+    layout[xindex, yindex + 3],
+    " ";
+    fontsize = theme[:fontsize],
+    halign = :left,
+    padding = (0, 0, 5, 5),
+    tellwidth = false,
+  )
+  blocks = [output_label, name_label, equal_label, value_label]
+  return value_label, blocks
+end
+
 function _analysis_entries(layout, wctx, theme)
-  names = []
-  values = []
-  xoffset = 2
-  index = 0
+  value_labels = []
+  objects = []
+  obsfs = []
 
-  for yindex in 1:3, xindex in 1:4
-    index += 1
-    Label(
-      layout[xindex + xoffset, (yindex - 1) * 4 + 1],
-      "R$index:";
-      fontsize = theme[:fontsize],
-      font = :bold,
-    )
-    name = Label(
-      layout[xindex + xoffset, (yindex - 1) * 4 + 2],
-      " ";
-      fontsize = theme[:fontsize],
-      halign = :left,
-    )
-    Label(
-      layout[xindex + xoffset, (yindex - 1) * 4 + 3],
-      "=";
-      fontsize = theme[:fontsize],
-    )
-    value = Label(
-      layout[xindex + xoffset, (yindex - 1) * 4 + 4],
-      " ";
-      fontsize = theme[:fontsize],
-      halign = :left,
-      padding = (10, 10, 5, 5),
-      tellwidth = false,
-    )
-    push!(values, value)
-    push!(names, name)
-  end
-
-  # Script changes. Refresh all variable names.
   on(wctx[:script]) do script
-    foreach(v -> v.text[] = " ", names)
+    foreach(l -> l.text[] = " ", value_labels)
+    foreach(delete!, objects)
+    foreach(off, obsfs)
+    empty!(objects)
+    empty!(obsfs)
     isnothing(script) && return
-    for (index, out) in enumerate(script.outputs)
-      if index < length(names)
-        names[index].text[] = string(out[1])
-      end
-    end
-  end
 
-  # Output changed. Update the displayed values.
-  on(wctx[:output]) do output
-    if isnothing(output)
-      foreach(v -> v.text[] = " ", values)
-      return
-    end
-    script = wctx[:script][]
-    for (index, out) in enumerate(script.outputs)
-      if index < length(values)
-        values[index].text[] = _output_to_string(output[out[1]])
+    noutputs = length(script.outputs)
+    for index in 1:min(noutputs, 15)
+      name = script.outputs[index][1]
+      value_label, blocks = _analysis_create_entry(
+        layout,
+        name,
+        index,
+        (index-1) % 5 + 3,
+        4div(index-1, 5) + 1,
+        theme,
+      )
+      push!(value_labels, value_label)
+      append!(objects, blocks)
+      obsf = on(wctx[:outputs]) do outputs
+        if isnothing(outputs)
+          value_label.text[] = ""
+        else
+          value_label.text[] = _output_to_string(outputs[name])
+        end
       end
+      push!(obsfs, obsf)
     end
   end
 
   return
 end
 
-gridlayoutoptions(::AnalysisWidget, wctx) = (size = (7, 12),)
+gridlayoutoptions(::AnalysisWidget, wctx) = (size = (8, 12),)
 
 function plotwidget(::AnalysisWidget, layout, wctx, theme)
   _analysis_topline(layout, wctx, theme)
   _analysis_script(layout, wctx, theme)
-
-  # Box(layout[2, 3]; width = 0, strokewidth = 1, strokecolor = :lightgray)
-
   _analysis_entries(layout, wctx, theme)
-
-  # rowgap!(layout, 1, 15)
-  # colgap!(layout, 2, 30)
-  # colgap!(layout, 3, 30)
 
   return
 end
