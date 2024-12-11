@@ -4,26 +4,25 @@ Widget for the graphical selection of images from the project repository.
 """
 struct ImageSelectorWidget <: Widget
   title::String
-  selected::Int
   image_store::Symbol
 end
 
-function ImageSelectorWidget(title; image_store, selected = 1)
-  return ImageSelectorWidget(title, selected, image_store)
+function ImageSelectorWidget(title; image_store)
+  return ImageSelectorWidget(title, image_store)
 end
 
 function initcontext(widget::ImageSelectorWidget, ctx)
   wctx = Dict{Union{Symbol, Int}, Any}()
 
   loadentries!(wctx, widget, [:image_store], obs = false)
-  loadentries!(wctx, widget, [:title, :selected], obs = true)
+  loadentries!(wctx, widget, [:title], obs = true)
 
   store = loadcontext(ctx, wctx[:image_store])
 
   wctx[:paths] = lift(entries -> location.(entries), store[:entries])
   wctx[:path] = lift(location, store[:entry])
   wctx[:image] = lift(imagefile, store[:entry])
-  wctx[:nimages] = lift(length, store[:entries])
+  wctx[:last_index] = lift(length, store[:entries])
 
   wctx[:meta] = lift(wctx[:image]) do image
     map(1:nchannels(image)) do index
@@ -35,15 +34,11 @@ function initcontext(widget::ImageSelectorWidget, ctx)
   wctx[:nchannels] = lift(nchannels, wctx[:image])
   wctx[:size] = lift(m -> m[1].size[1:2], wctx[:meta])
 
-   # This should be modified to modify the current store entry
-  wctx[:select] = store[:select]
+  wctx[:active_index] = store[:active_index]
+  wctx[:select_index] = store[:select_index]
+  wctx[:select_prev] = store[:select_prev]
+  wctx[:select_next] = store[:select_next]
 
-  # This is done for letting the current image selection survive saving / loading
-  onany(store[:entry], store[:entries]) do entry, entries
-    index = findfirst(isequal(entry), entries)
-    wctx[:selected][] = isnothing(index) ? 1 : index
-  end
-  
   return wctx
 end
 
@@ -77,7 +72,7 @@ function plotwidget(::ImageSelectorWidget, layout, wctx, theme)
   )
   Label(
     file_buttons_layout[1, 3],
-    lift((i, n) -> "$i / $n", wctx[:selected], wctx[:nimages]),
+    lift((i, n) -> "$i / $n", wctx[:active_index], wctx[:last_index]),
     fontsize = theme[:fontsize],
     color = :gray,
     halign = :right,
@@ -139,22 +134,23 @@ function plotwidget(::ImageSelectorWidget, layout, wctx, theme)
   )
 
   on(prev_file_button.clicks) do _
-    index = path_menu.i_selected[]
-    if index > 1
-      path_menu.i_selected[] = index - 1
-    end
+    notify(wctx[:select_prev])
   end
 
   on(next_file_button.clicks) do _
-    index = path_menu.i_selected[]
-    if index < length(wctx[:paths][])
-      path_menu.i_selected[] = index + 1
+    notify(wctx[:select_next])
+  end
+
+  on(path_menu.i_selected) do index
+    if wctx[:select_index][] != index
+      wctx[:select_index][] = index
     end
   end
 
-  # TODO: this is not good. wctx[:select] requires an image id, not a relative position
-  on(path_menu.i_selected) do selected
-    wctx[:select][] = selected
+  on(wctx[:select_index]) do index
+    if path_menu.i_selected[] != index
+      path_menu.i_selected[] = index
+    end
   end
 
   # Switch images by clicking left / right on the keyboard

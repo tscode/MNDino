@@ -116,26 +116,45 @@ After each call of the script, the variable store is updated via the function
 Returns a vector of computed outputs.
 """
 function runscript(
-  iterate::Function,
   script::DinoScript,
   project::Project;
+  image_store,
   variable_store,
+  variables = [],
 )
   ctx = initcontext(project)
-  store = loadcontext(ctx, variable_store)
-  for key in script.inputs
-    @assert haskey(store, key) """
-    The variable store of the project does not define the required input 
-    variable :$key.
+  store = loadcontext(ctx, image_store)
+  vars = loadcontext(ctx, variable_store)
+
+  for key in variables
+    @assert haskey(vars, key) """
+    The variable store does not define the requested variable :$key.
     """
   end
-  results = []
-  state = iterate(ctx, nothing)
-  while !isnothing(state)
-    inputs = [key => store[key][] for key in script.inputs]
-    outputs = script(inputs)
-    push!(outputs, results)
-    state = iterate(ctx, state)
+  for key in script.inputs
+    @assert haskey(vars, key) """
+    The variable store does not define the required input variable :$key.
+    """
   end
-  return results
+
+  names = [:index; :path; variables; script.outputs]
+  results = []
+
+  notify(store[:select_first])
+  for _ in 1:length(store[:entries][])
+    push!(results, store[:active_index][])
+    push!(results, store[:entry][].path)
+    for key in variables
+      push!(results, vars[key][])
+    end
+    inputs = [key => vars[key][] for key in script.inputs]
+    outputs = script(inputs)
+    for key in script.outputs
+      push!(results, outputs[key])
+    end
+    notify(store[:select_next])
+  end
+
+  result = reshape(results, length(names), :)'
+  return names, collect(result)
 end

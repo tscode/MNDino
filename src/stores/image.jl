@@ -36,7 +36,7 @@ struct ImageStore <: Provider
   ids::Vector{Int}
   paths::Vector{String}
   shelfs::Dict{Symbol, Dict}
-  active::Int
+  active_index::Int
 end
 
 function ImageStore(paths :: Vector{String})
@@ -59,32 +59,82 @@ function initcontext(store::ImageStore, ctx)
   # For interal purposes
   pctx[:shelfs] = store.shelfs
 
-  # Changing this observable will try to change the active image.
-  pctx[:select] = Observable(-1)
+  # Changing this observable to a valid entry id will change the active entry
+  pctx[:select_id] = Observable(-1)
 
-  # The id of the active entry. Select may change this.
-  # Should not be listened to. Use pctx[:entry] instead.
-  pctx[:active] = Observable(store.active)
+  # Changing this observable to a valid entry index will change the active entry
+  # Do not listen to this observable
+  pctx[:select_index] = Observable(-1)
 
-  # Remember the most recent active entry id. For internal purposes.
-  pctx[:recent] = Observable(store.active)
+  # Notifying one of these observables will jump to the first or last entry
+  # Do not listen to these observables
+  pctx[:select_first] = Observable(nothing)
+  pctx[:select_last] = Observable(nothing)
+
+  # Notifying one of these observables will move the selected entry up or down
+  # Do not listen to these observables
+  pctx[:select_prev] = Observable(nothing)
+  pctx[:select_next] = Observable(nothing)
+
+  # The id of the active entry. Can be -1 if nothing is selected
+  pctx[:active_id] = Observable(-1)
+
+  # The index of the active entry. Can be -1 if nothing is selected
+  pctx[:active_index] = Observable(-1)
+
+  # Used to cleanly create entry changes. For internal purposes only.
+  pctx[:activate_id] = Observable(-1)
+  pctx[:recent_id] = Observable(-1)
 
   # Stores the currently active shelfs of the store. For interal purposes.
   pctx[:shelfkeys] = Symbol[]
-  
-  on(pctx[:select]) do select
-    if select == pctx[:active][]
-      return
-    elseif select == -1 # deselect
-      pctx[:active][] = -1
-    else # try to select an entry -- must exist
-      entries = pctx[:entries][]
-      index = findfirst(entry -> entry.id == select, entries)
+
+  on(pctx[:select_first]) do _
+    pctx[:select_index][] = 1
+  end
+
+  on(pctx[:select_last]) do _
+    pctx[:select_index][] = length(pctx[:entries][])
+  end
+    
+  on(pctx[:select_prev]) do _
+    if pctx[:active_index][] > 1
+      pctx[:select_index][] = pctx[:select_index][] - 1
+    end
+  end
+
+  on(pctx[:select_next]) do _
+    if pctx[:active_index][] < length(pctx[:entries][])
+      pctx[:select_index][] = pctx[:select_index][] + 1
+    end
+  end
+
+  on(pctx[:select_id]) do id
+    if id == -1
+      pctx[:select_index][] = -1
+    else
+      index = findfirst(entry -> entry.id == id, pctx[:entries])
       if !isnothing(index)
-        pctx[:active][] = select
+        pctx[:select_index][] = index
       end
     end
   end
+
+  on(pctx[:select_index]) do index
+    if index == pctx[:active_index][]
+      return
+    elseif index == -1 # deselect
+      pctx[:activate_id][] = -1 # update pctx[:entry] and related observables
+      pctx[:active_id][] = -1
+      pctx[:active_index][] = -1
+    elseif 1 <= index <= length(pctx[:entries][])
+      entry = pctx[:entries][][index]
+      pctx[:activate_id][] = entry.id # update pctx[:entry] and related observables
+      pctx[:active_id][] = entry.id
+      pctx[:active_index][] = index
+    end
+  end
+  
 
   # Listen to this to get notified of changes in the entry.
   # Happens BEFORE pctx[:change], pctx[:change_to], but AFTER pctx[:change_from]
@@ -102,15 +152,15 @@ function initcontext(store::ImageStore, ctx)
     pctx[:update][] = pctx[:entry][]
   end
 
-  on(pctx[:active], update = true) do active
+  on(pctx[:activate_id], update = true) do id
     entries = pctx[:entries][]
 
-    index = findfirst(entry -> entry.id == active, entries)
+    index = findfirst(entry -> entry.id == id, entries)
     next = isnothing(index) ? nothing : entries[index]
-    index = findfirst(entry -> entry.id == pctx[:recent][], entries)
+    index = findfirst(entry -> entry.id == pctx[:recent_id][], entries)
     prev = isnothing(index) ? nothing : entries[index]
 
-    pctx[:recent][] = active
+    pctx[:recent_id][] = id
     pctx[:change_from][] = prev
     pctx[:entry][] = next
     pctx[:change_to][] = next
@@ -118,12 +168,17 @@ function initcontext(store::ImageStore, ctx)
   end
 
   on(pctx[:entries]) do entries
-    active = pctx[:active][]
-    index = findfirst(entry -> entry.id == active, entries)
+    id = pctx[:active_id][]
+    index = findfirst(entry -> entry.id == id, entries)
     if isnothing(index)
-      pctx[:active][] = -1
+      pctx[:select_index][] = -1
+    else
+      pctx[:select_index][] = index
     end
   end
+
+  # All dependencies set. Now select the correct index
+  pctx[:select_index][] = store.active_index
 
   return pctx
 end

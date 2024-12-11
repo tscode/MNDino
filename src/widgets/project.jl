@@ -73,7 +73,7 @@ function plotwidget(::ProjectWidget, layout, wctx, theme)
     halign = :right,
     reset_on_defocus = true,
     placeholder = " ",
-    width = 300,
+    width = 500,
   )
 
   on(save_button.clicks) do _

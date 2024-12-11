@@ -161,7 +161,12 @@ end
 Serialize `project` into the file `filename`.
 """
 function saveproject(project, filename::String)
-  Serialization.serialize(filename, project)
+  file = GZip.open(filename, "w")
+  try
+    Serialization.serialize(file, project)
+  finally
+    close(file)
+  end
   return
 end
 
@@ -171,6 +176,11 @@ end
 Deserialize a project from the file `filename`.
 """
 function loadproject(filename::String)
-  return Serialization.deserialize(filename)
+  file = GZip.open(filename, "r")
+  try
+    return Serialization.deserialize(file)
+  finally
+    close(file)
+  end
 end
 

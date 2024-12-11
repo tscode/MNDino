@@ -92,6 +92,9 @@ function initcontext(widget::ChannelViewWidget, ctx)
   wctx[:zindex] = lift(getvalue(:zindex), wctx[:view])
   wctx[:variant] = lift(getvalue(:variant), wctx[:view])
 
+  addvariable!(vars, :zindex, wctx[:zindex])
+  addvariable!(vars, :variant, wctx[:variant])
+
   wctx[:mouse_position] = Observable(Point2f(NaN, NaN))
   wctx[:focused] = Observable(-1; ignore_equal_values = true)
   wctx[:reset_clipping] = Observable(nothing)

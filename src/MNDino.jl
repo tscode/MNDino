@@ -2,9 +2,11 @@ module MNDino
 
 using Serialization
 using Statistics
+using DelimitedFiles
 
 using Colors
 using HDF5 # Imaris support
+using GZip # Reduce the size of project files greatly
 
 using Observables
 using Makie
