@@ -23,10 +23,9 @@ function initcontext(widget::AnalysisWidget, ctx)
 
   vars = loadcontext(ctx, wctx[:variable_store])
 
-  wctx[:script_error] = Observable{Union{String, Nothing}}(nothing)
-
   wctx[:script] = Observable{Union{DinoScript, Nothing}}(nothing)
   wctx[:outputs] = Observable{Union{Dict, Nothing}}(nothing)
+  wctx[:script_error] = Observable{Union{String, Nothing}}(nothing)
 
   # Notifying will trigger evaluation and store the result in output
   wctx[:evaluate] = Observable(nothing)
@@ -53,21 +52,8 @@ function initcontext(widget::AnalysisWidget, ctx)
   inputs = Dict{Union{Symbol, Int}, Any}()
   inputobsf = []
 
-  # React to changes of the script path
-  on(wctx[:script_path]) do path
-    isnothing(path) && return
-    try
-      wctx[:script][] = DinoScript(path)
-    catch err
-      wctx[:script_error][] = sprint(showerror, err)
-      wctx[:script][] = nothing
-      wctx[:outputs][] = nothing
-    end
-    return
-  end
-
   # Check if the number of outputs can be displayed
-  on(wctx[:script]; update = true) do script
+  on(wctx[:script]) do script
     isnothing(script) && return
     if length(script.outputs) > 15
       @warn """
@@ -79,7 +65,7 @@ function initcontext(widget::AnalysisWidget, ctx)
   end
 
   # Load all inputs from the variable store
-  on(wctx[:script]; update = true) do script
+  on(wctx[:script]) do script
     isnothing(script) && return
 
     # Remove evaluation notifiers from (potential) previous script
@@ -110,11 +96,12 @@ function initcontext(widget::AnalysisWidget, ctx)
   end
 
   # Evaluate the outputs upon script change
-  on(wctx[:script]; update = true) do script
+  on(wctx[:script]) do script
     isnothing(script) && return
     notify(wctx[:evaluate])
     return
   end
+
 
   # Evaluate the script on the current input
   # async_latest: prevent evaluation requests from potentially overflowing
@@ -138,6 +125,23 @@ function initcontext(widget::AnalysisWidget, ctx)
     return
   end
 
+  # React to changes of the script path
+  on(wctx[:script_path], update = true) do path
+    isnothing(path) && return
+    try
+      wctx[:script][] = DinoScript(path)
+    catch err
+      if err isa Meta.ParseError
+        wctx[:script_error][] = "Unable to parse script file"
+      else
+        wctx[:script_error][] = sprint(showerror, err)
+      end
+      wctx[:script][] = nothing
+      wctx[:outputs][] = nothing
+    end
+    return
+  end
+
   return wctx
 end
 
@@ -153,7 +157,7 @@ function _analysis_topline(layout, wctx, theme)
   )
 
   export_label = Label(layout[1, 2], ""; fontsize = theme[:fontsize])
-  Label(layout[1, 3], "Auto Update"; fontsize = theme[:fontsize])
+  Label(layout[1, 3], "Auto update"; fontsize = theme[:fontsize])
   live_toggle =
     Toggle(layout[1, 4]; height = 20, width = 40, active = wctx[:live][])
 
@@ -269,7 +273,7 @@ function _analysis_script(layout, wctx, theme)
     end
   end
 
-  on(wctx[:script]) do script
+  on(wctx[:script], update = true) do script
     if isnothing(script)
       path_label.text[] = "No script loaded"
     else
@@ -324,7 +328,7 @@ function _analysis_entries(layout, wctx, theme)
   objects = []
   obsfs = []
 
-  on(wctx[:script]) do script
+  on(wctx[:script], update = true) do script
     foreach(l -> l.text[] = " ", value_labels)
     foreach(delete!, objects)
     foreach(off, obsfs)
