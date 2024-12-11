@@ -1,22 +1,28 @@
 
-
 struct AnalysisWidget <: Widget
   title::String
   script_path::String
+  image_store::Symbol
   variable_store::Symbol
 end
 
-function AnalysisWidget(title; variable_store)
-  return AnalysisWidget(title, "", variable_store)
+function AnalysisWidget(title; image_store, variable_store)
+  return AnalysisWidget(title, "", image_store, variable_store)
 end
 
 function initcontext(widget::AnalysisWidget, ctx)
   wctx = Dict{Union{Symbol, Int}, Any}()
 
-  loadentries!(wctx, widget, [:title, :variable_store]; obs = false)
+  loadentries!(
+    wctx,
+    widget,
+    [:title, :image_store, :variable_store];
+    obs = false,
+  )
   loadentries!(wctx, widget, [:script_path]; obs = true)
 
-  variables = loadcontext(ctx, wctx[:variable_store])
+  vars = loadcontext(ctx, wctx[:variable_store])
+  store = loadcontext(ctx, wctx[:image_store])
 
   wctx[:load_error] = Observable{Union{String, Nothing}}(nothing)
   wctx[:eval_error] = Observable{Union{String, Nothing}}(nothing)
@@ -24,11 +30,26 @@ function initcontext(widget::AnalysisWidget, ctx)
   wctx[:script] = Observable{Union{DinoScript, Nothing}}(nothing)
   wctx[:output] = Observable{Union{Dict, Nothing}}(nothing)
 
-  # Notifying will trigger evaluation and store the result in wctx[:output]
+  # Notifying will trigger evaluation and store the result in output
   wctx[:evaluate] = Observable(nothing)
 
   # Whether each change should automatically trigger an evaluation
   wctx[:live] = Observable(true)
+
+  # Store the export function that requires access to the global context
+  wctx[:export] =
+    () -> begin
+      isnothing(wctx[:script][]) && return
+      notify(ctx[:update])
+      project = updateproject(ctx[:project], ctx)
+      runscript(
+        wctx[:script][],
+        project;
+        image_store = wctx[:image_store],
+        variable_store = wctx[:variable_store],
+        variables = [:zindex],
+      )
+    end
 
   # Script inputs
   inputs = Dict{Union{Symbol, Int}, Any}()
@@ -49,7 +70,7 @@ function initcontext(widget::AnalysisWidget, ctx)
   end
 
   # Check if the number of outputs can be displayed
-  on(wctx[:script], update = true) do script
+  on(wctx[:script]; update = true) do script
     isnothing(script) && return
     if length(script.outputs) > 6
       @warn """
@@ -61,7 +82,7 @@ function initcontext(widget::AnalysisWidget, ctx)
   end
 
   # Load all inputs from the variable store
-  on(wctx[:script], update = true) do script
+  on(wctx[:script]; update = true) do script
     isnothing(script) && return
 
     # Remove evaluation notifiers from (potential) previous script
@@ -69,9 +90,9 @@ function initcontext(widget::AnalysisWidget, ctx)
     empty!(inputobsf)
     # Reset input dict
     empty!(inputs)
-    
+
     for key in script.inputs
-      if !haskey(variables, key)
+      if !haskey(vars, key)
         wctx[:load_error][] = "Requested variable $key does not exist."
         wctx[:script][] = nothing
         return
@@ -79,7 +100,7 @@ function initcontext(widget::AnalysisWidget, ctx)
     end
 
     for key in script.inputs
-      inputs[key] = variables[key]
+      inputs[key] = vars[key]
       obsf = on(inputs[key]) do _
         if wctx[:live][]
           notify(wctx[:evaluate])
@@ -92,7 +113,7 @@ function initcontext(widget::AnalysisWidget, ctx)
   end
 
   # Evaluate the outputs upon script change
-  on(wctx[:script], update = true) do script
+  on(wctx[:script]; update = true) do script
     isnothing(script) && return
     notify(wctx[:evaluate])
     return
@@ -101,7 +122,7 @@ function initcontext(widget::AnalysisWidget, ctx)
   # Evaluate the script on the current input
   # async_latest: prevent evaluation requests from potentially overflowing
   on(Observables.async_latest(wctx[:evaluate])) do _
-  # on(wctx[:evaluate]) do _
+    # on(wctx[:evaluate]) do _
     script = wctx[:script][]
     isnothing(script) && return
 
@@ -134,8 +155,9 @@ function _analysis_topline(layout, wctx, theme)
     font = :bold,
     fontsize = theme[:titlesize],
   )
-  Label(layout[1, 3], "Auto Update"; fontsize = theme[:fontsize])
 
+  export_label = Label(layout[1, 2], ""; fontsize = theme[:fontsize])
+  Label(layout[1, 3], "Auto Update"; fontsize = theme[:fontsize])
   live_toggle = Toggle(layout[1, 4]; height = 20, width = 40)
 
   update_button =
@@ -161,6 +183,43 @@ function _analysis_topline(layout, wctx, theme)
   on(update_button.clicks) do _
     notify(wctx[:evaluate])
     return
+  end
+
+  export_msg = (msg, color) -> begin
+    @async begin
+      export_label.color[] = color
+      export_label.text[] = msg
+      sleep(3)
+      export_label.text[] = ""
+    end
+  end
+
+  on(export_button.clicks) do _
+    red = RGB(0.5, 0.2, 0.2)
+    green = RGB(0.2, 0.4, 0.2)
+    # @async begin
+    begin
+      if isnothing(wctx[:script][])
+        export_msg("no script loaded", red)
+        return
+      end
+      path = NativeFileDialog.save_file()
+      if path == ""
+        export_msg("export aborted", red)
+        return
+      end
+      try
+        task = Threads.@spawn wctx[:export]()
+        names, data = fetch(task)
+        open(path, "w") do io
+          println(io, join(names, ","))
+          return writedlm(io, data, ',')
+        end
+        export_msg("export successful", green)
+      catch err
+        export_msg("export failed", red)
+      end
+    end
   end
 
   # TODO: Export button. Will probably work by internally saving and loading the
@@ -223,9 +282,7 @@ function _analysis_script(layout, wctx, theme)
       path_label.text[] = "Script: $path"
     end
   end
-  
 end
-
 
 _output_to_string(s::String) = s
 _output_to_string(v::Real) = string(Base.round(v; digits = 2))
@@ -276,7 +333,6 @@ function _analysis_entries(layout, wctx, theme)
     push!(values, value)
     push!(names, name)
   end
-
 
   # Script changes. Refresh all variable names.
   on(wctx[:script]) do script

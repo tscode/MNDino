@@ -137,7 +137,7 @@ function runscript(
     """
   end
 
-  names = [:index; :path; variables; script.outputs]
+  names = [:index; :path; variables; first.(script.outputs)]
   results = []
 
   notify(store[:select_first])
@@ -147,14 +147,14 @@ function runscript(
     for key in variables
       push!(results, vars[key][])
     end
-    inputs = [key => vars[key][] for key in script.inputs]
+    inputs = Dict(key => vars[key][] for key in script.inputs)
     outputs = script(inputs)
-    for key in script.outputs
+    for (key, _) in script.outputs
       push!(results, outputs[key])
     end
     notify(store[:select_next])
   end
 
-  result = reshape(results, length(names), :)'
-  return names, collect(result)
+  result = permutedims(reshape(results, length(names), :))
+  return names, result
 end

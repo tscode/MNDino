@@ -140,6 +140,7 @@ function main(;
   addprovider!(project, :analysis) do
     AnalysisWidget(
       "Analysis",
+      image_store = :images,
       variable_store = :variables,
     )
   end
