@@ -43,9 +43,9 @@ function ChannelViewWidget(
   )
 end
 
-function _derive_channel_specs(image; variant = nothing)
+function _derive_channel_specs(image; variant = (;))
   return map(1:nchannels(image)) do cindex
-    meta = metadata(image, cindex; variant)
+    meta = metadata(image, cindex; variant...)
     return ChannelSpec(cindex, meta.name, meta.color)
   end
 end

@@ -19,8 +19,7 @@ end
 
 function default_paths()
   return [
-    "data/H2bub488_MDC1568_POLS5647_mnbody27_2024-11-01.ims",
-    "data/h4k20me1488_MDC1568_POLS5647_mnbody50_2024-11-01.ims",
+    "data/Cell_with_dye.jpg",
   ]
 end
 
@@ -73,28 +72,39 @@ function runproject(project::Project; wait = false, size = (1200, 1000))
   return ctx
 end
 
+function filterlist()
+  images = map([ImarisFile, CommonImageFile]) do F
+    exts = map(ext -> ext[2:end], extensions(F))
+    join(exts, ",")
+  end
+  images = join(images, ";")
+  return "*;dino;$images"
+end
+
 function welcome()
-  filterlist = "ims,dino"
-  paths = NativeFileDialog.pick_multi_file(; filterlist)
+  paths = NativeFileDialog.pick_multi_file(; filterlist = filterlist())
   if isempty(paths)
     @info "No files have been selected"
     return
   elseif length(paths) == 1 && splitext(paths[1])[2] == ".dino"
     project = loadproject(paths[1])
     @info "Project file $(paths[1]) has been loaded"
-  elseif all(p -> splitext(p)[2] == ".ims", paths)
+  elseif all(p -> splitext(p)[2] in extensions(ImarisFile), paths)
     project = newproject(; paths)
-    @info "New project with $(length(paths)) paths has been created"
+    @info "New project with $(length(paths)) imaris files has been created"
+  elseif all(p -> splitext(p)[2] in extensions(CommonImageFile), paths)
+    @info "New project with $(length(paths)) image files has been created"
+    project = newproject(; paths)
   else
-    project = nothing
     @warn "Some of the provided files are not valid image files. Exiting"
+    project = nothing
   end
 
   return project
 end
 
 function newproject(;
-  name = "MNDino Project",
+  name = "New Project",
   theme = default_theme(),
   paths = default_paths(),
 )

@@ -105,8 +105,10 @@ Global format storage. Can be extende by new subtypes of `ImageFile`.
 const FORMATS = Dict{String, Type{<: ImageFile}}()
 
 function register_format!(::Type{I}) where {I <: ImageFile}
-  ext = extension(I)
-  FORMATS[ext] = I
+  exts = extensions(I)
+  for ext in exts
+    FORMATS[ext] = I
+  end
   return
 end
 

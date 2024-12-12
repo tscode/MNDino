@@ -4,22 +4,30 @@ using Serialization
 using Statistics
 using DelimitedFiles
 
-using Colors
-using HDF5 # Imaris support
-using GZip # Reduce the size of project files greatly
-
 using Observables
 using Makie
 using Makie.GridLayoutBase: Outer
 
-# Opening and closing files
+using GZip # Reduce the size of project files greatly
+
+# Imaris file format support
+using HDF5
+
+# Support for common images
+import ImageIO
+import FileIO
+
+# Opening and saving files
 import NativeFileDialog
 
 # Image operations
+using Colors
+import ImageCore
 import ImageFiltering
 import ImageTransformations
 import ImageSegmentation
 import ImageMorphology
+
 
 include("patches/dragpan.jl")
 
@@ -69,13 +77,16 @@ function desaturate(color::C, factor) where {C <: Color}
 end
 
 include("imagefile.jl")
-include("imaris.jl")
 include("filter.jl")
 
 include("provider.jl")
 include("widget.jl")
 include("project.jl")
 include("dinoscript.jl")
+
+# image format support
+include("formats/common.jl")
+include("formats/imaris.jl")
 
 # store providers
 include("stores/image.jl")

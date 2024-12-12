@@ -16,7 +16,7 @@ function ImarisFile(path::String)
   ImarisFile(path, h5open(path, "r"))
 end
 
-extension(::Type{ImarisFile}) = ".ims"
+extensions(::Type{ImarisFile}) = [".ims"]
 
 location(ims::ImarisFile) = ims.path
 
@@ -43,8 +43,6 @@ function parseattribute(::Type{RGB}, attrib::Vector{String})
   r, g, b = parse.(Float64, rgb)
   return RGB{Float16}(r, g, b)
 end
-
-path(img::ImarisFile) = img.path
 
 function nzlayers(img::ImarisFile; kwargs...)
   group = img.hdf5["DataSetInfo/CustomData"]
@@ -111,9 +109,11 @@ function imagedata(img::ImarisFile, cindex, zindex; kwargs...)
 
   # Internal consistency checks
   meta = metadata(img, cindex; resolution, time)
-  @assert meta.size[1:2] == size(data)[1:2] """
-  Internal resolution mismatch ($(meta.size[1:2]) vs. $(size(data)[1:2])).
-  """
+  if meta.size[1:2] != size(data)[1:2] 
+    @warn """
+    Internal resolution mismatch ($(meta.size[1:2]) vs. $(size(data)[1:2])).
+    """
+  end
   @assert meta.size[3] <= size(data)[3] """
   Number of Z-points in metadata too large.
   """

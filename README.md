@@ -21,6 +21,8 @@ After loading some files, you will be greeted by a user interface with several w
 #### Generic navigation
 * The *left* / *right* keyboard arrow keys can be used to switch images.
 * The *up* / *down* keyboard arrow keys can be used to change the Z-index.
+* Double clicking the left mouse button restores the zoom level in the channel view.
+* Double clicking the right mouse button clears the segment of the focused channel.
 
 #### Pencil tool
 * In the channel view, pressing *shift* temporarily enables the **pencil tool**. With the pencil tool, you can draw masks that describe the geometry of regions you are interested in.
@@ -51,9 +53,9 @@ inputs = (:C1, :C2, :S1)
 # We declare the following outputs from our script.
 # We add some documentation to clarify what the outputs refer to.
 outputs = (
-  meanC1 => "The mean value of channel C1",
-  meanC1S1 => "The mean value of channel C1 restricted to S1"
-  meanC2S1 => "The mean of C2 weighted by C1 restricted to S1"
+  :meanC1 => "The mean value of channel C1",
+  :meanC1S1 => "The mean value of channel C1 restricted to S1",
+  :meanC2S1 => "The mean of C2 weighted by C1 restricted to S1",
 )
 
 # Here, we implement the actual computations that generate our outputs
