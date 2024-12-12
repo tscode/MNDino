@@ -6,17 +6,17 @@ This repository contains a julia package called MNDino. MNDino aspires to become
 As a library, MNDino aims to provide a number of general purpose widgets that can conveniently be combined to fit a range of different workflows. For now,  the development focus will be a specific GUI layout that targets multi-channel microscopy images.
 
 ## Installation
-The package is not yet officially registered. Use the following commands within a julia shell to install the package.
+The package is not yet officially registered. Use the following commands within a julia shell to install the latest stable version of the package.
 ```julia
 using Pkg
-Pkg.add("https://gitlab.gwdg.de/staudt1/mndino.git")
+Pkg.add(url="https://gitlab.gwdg.de/staudt1/mndino.git")
 ```
-A julia version 1.9 or higher is strongly recommended. You can get julia from [here](https://julialang.org/downloads/).
+A julia version of 1.9 or higher is strongly recommended. You can get julia from [here](https://julialang.org/downloads/).
 
 ## Usage
-At the moment (as of version *v0.1*), only one GUI layout is included in MNDino. This layout can be accessed via `MNDino.main()`. A window will ask for image files (e.g., *.ims*) or an MNDino project file (*.dino*). Ideally, you start a julia environment with at least two threads (i.e., run `julia -t2`).
+At the moment (version v0.1), only one GUI layout is included in MNDino. This layout can be accessed via `MNDino.main()`. A window will ask for image files (e.g., *.ims*) or an MNDino project file (*.dino*). Ideally, you start a julia environment with at least two threads (i.e., run `julia -t2`).
 
-After loading some files, you will be greeted by a user interface with several widgets. While most interaction options should be transparent, the following hints might help. They apply to version *v0.1* and are probably subject to future change.
+After picking some files, you will be greeted by a user interface with several widgets. The following hints might help navigate the interaction options. They apply to version v0.1 and are likely subject to future change.
 
 #### Generic navigation
 * The *left* / *right* keyboard arrow keys can be used to switch images.
