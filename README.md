@@ -21,8 +21,8 @@ After loading some files, you will be greeted by a user interface with several w
 #### Generic navigation
 * The *left* / *right* keyboard arrow keys can be used to switch images.
 * The *up* / *down* keyboard arrow keys can be used to change the Z-index.
-* Double clicking the left mouse button restores the zoom level in the channel view.
-* Double clicking the right mouse button clears the segment of the focused channel.
+* *Double clicking* the *left mouse button* restores the zoom level in the channel view.
+* *Double clicking* the *right mouse button* clears the segment of the channel the mouse hovers over.
 
 #### Pencil tool
 * In the channel view, pressing *shift* temporarily enables the **pencil tool**. With the pencil tool, you can draw masks that describe the geometry of regions you are interested in.

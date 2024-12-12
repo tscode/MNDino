@@ -109,7 +109,7 @@ function imagedata(img::ImarisFile, cindex, zindex; kwargs...)
 
   # Internal consistency checks
   meta = metadata(img, cindex; resolution, time)
-  if meta.size[1:2] != size(data)[1:2] 
+  if meta.size[1:2] != size(data)[1:2]
     @warn """
     Internal resolution mismatch ($(meta.size[1:2]) vs. $(size(data)[1:2])).
     """
