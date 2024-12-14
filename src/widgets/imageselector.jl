@@ -26,6 +26,7 @@ function initcontext(widget::ImageSelectorWidget, ctx)
 
   wctx[:meta] = lift(wctx[:image]) do image
     map(1:nchannels(image)) do index
+      # TODO: This will need variant information!
       metadata(image, index)
     end
   end
@@ -45,7 +46,6 @@ end
 gridlayoutoptions(::ImageSelectorWidget, wctx) = (size = (5, 2),)
 
 function plotwidget(::ImageSelectorWidget, layout, wctx, theme)
-
   Label(
     layout[1, :],
     wctx[:title],

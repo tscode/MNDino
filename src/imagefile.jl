@@ -13,7 +13,13 @@ levels) are stored as well.
 """
 abstract type ImageFile end
 
-extension(::I) where {I <: ImageFile} = extension(I)
+"""
+    extensions(I::Type{<: ImageFile}) 
+    extensions(img::ImageFile) 
+
+List of supported file extensions for the image file backend I.
+"""
+extensions(::I) where {I <: ImageFile} = extensions(I)
 
 """
     nchannels(img::ImageFile)
@@ -34,8 +40,8 @@ function nzlayers end
 
 Returns a named tuple of variant information of `img`.
 
-An example could be `variants(img) = (time = 0:10, resolution = 0:4)` if `img`
-contains imaging data for `11` time points and `4` resolution levels.
+An example could be `variants(img) = (resolution = 0:4)` if `img`
+contains imaging data for `5` resolution levels.
 """
 function variants end
 
@@ -44,70 +50,107 @@ function variants end
 
 Returns the default variant of `img`.
 """
-function defaultvariant end
+function variantdefault end
 
 """
     defaultzindex(img::ImageFile)
 
 Returns a default valid z-index of `img`.
 """
-function defaultzindex end
+function zindexdefault end
 
 """
-    metadata(img::ImageFile, cindex; variant_options...)
+    channelnames(img::ImageFile)  
 
-Retrieve a named tuple of metadata information about the image slice with
-channel index `cindex`. Additional options rely on `img`.
+Retrieve all channel names of `img`.
 
-This operation should be fast.
+See also [`channelname`](@ref).
 """
-function metadata end
+function channelnames end
 
 """
-    channelname(img::ImageFile, cindex; variant_options...) 
+    channelname(img::ImageFile, cindex) 
 
 Retrieve the name of the channel at `cindex`.
+
+See also [`channelnames`](@ref).
 """
 function channelname end
 
 """
-    channelcolor(img::ImageFile, cindex; variant_options...) 
+    channelcolors(img::ImageFile)  
+
+Retrieve all channel colors of `img`.
+
+See also [`channelcolor`](@ref).
+"""
+function channelcolors end
+
+"""
+    channelcolor(img::ImageFile, cindex) 
 
 Retrieve the color of the channel at `cindex`.
+
+See also [`channelcolors`](@ref).
 """
 function channelcolor end
 
 """
-    imagedata(img::ImageFile, zindex, cindex; variant_options...)
+    metadata(img::ImageFile, cindex; kwargs...)
 
-Retrieve the intensity information of the image slice with Z index `zindex` and
-channel index `cindex`. Additional options rely on `img`.
+Retrieve a named tuple of metadata information about the channel with
+channel index `cindex`.
 
-Depending on the image, this operation can potentially be slow and memory
-intensive.
+Additional keyword arguments specify the variant of `img`.
+"""
+function metadata end
+
+"""
+    imagedata(img::ImageFile; kwargs...)
+    imagedata(img::ImageFile, cindex, zindex, tindex; kwargs...)
+
+Retrieve the full image data stored in `img`.
+
+The image data will typically be a dense multidimensional array with the
+dimensions (c, x, y, z, t). Slices can be obtained by additionally providing `cindex`, `zindex`, and `tindex`.
+
+Additional keyword arguments specify the variant of `img`.
+
+!!! note
+
+    Depending on the image and the backend, this operation can potentially be
+    slow and memory intensive. Some backends will for this reason not implement
+    `imagedata(img)` and may require scalars for indexing.
 """
 function imagedata end
+
+function imagedata(img::I; kwargs...) where {I <: ImageFile}
+  error("""
+  The image file backend I does not support retrieving the full image data
+  """)
+end
 
 """
     location(img::ImageFile) 
 
-If implemented, returns the location (path) of an image on the hard drive.
+Returns the location (path) of an image on the hard drive.
 
-Defaults to "".
+Returns the empty string `""` if no meaningful path exists.
 """
 function location(::ImageFile)
   return ""
 end
 
 """
-Global format storage. Can be extende by new subtypes of `ImageFile`.
+Global format storage. Can be extended by registering new subtypes of
+`ImageFile`.
 """
-const FORMATS = Dict{String, Type{<: ImageFile}}()
+const IMAGE_FORMATS = Dict{String, Type{<: ImageFile}}()
 
 function register_format!(::Type{I}) where {I <: ImageFile}
   exts = extensions(I)
   for ext in exts
-    FORMATS[ext] = I
+    IMAGE_FORMATS[ext] = I
   end
   return
 end
@@ -119,9 +162,9 @@ Load the image file located at `path`.
 """
 function loadimagefile(path)
   _, ext = splitext(path)
-  @assert ext in keys(FORMATS) """
+  @assert ext in keys(IMAGE_FORMATS) """
   Unsupported extension $ext at $path. 
   """
-  I = FORMATS[ext]
+  I = IMAGE_FORMATS[ext]
   return I(path)
 end

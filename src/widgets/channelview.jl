@@ -51,7 +51,7 @@ function _derive_channel_specs(image; variant = (;))
 end
 
 function _derive_default_view(image)
-  return View2D(defaultzindex(image), defaultvariant(image))
+  return View2D(zindexdefault(image), variantdefault(image))
 end
 
 function initcontext(widget::ChannelViewWidget, ctx)
@@ -114,7 +114,11 @@ function initcontext(widget::ChannelViewWidget, ctx)
       img = wctx[:image][]
       # TODO: this is currently inefficient, since both
       # :image and :view are updated each time the path changes
-      return Float32.(imagedata(img, c.index, view.zindex; view.variant...))
+      # TODO: here, we want to include flexible time indices, but this would change the ChannelViewWidget struct! This will only be possible once we work with the new project serialization format in version 0.2.
+      tindex = 1
+      return Float32.(
+        imagedata(img, c.index, view.zindex, tindex; view.variant...)
+      )
     end
     data_f = lift((f, data) -> f(data), wctx[:filter], data)
 
