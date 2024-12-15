@@ -1,10 +1,4 @@
 
-struct Segment <: Widget
-  mask::BitMatrix
-  color::Color
-  source::Int
-end
-
 struct SegmentsWidget <: Widget
   title::String
   segment_provider::Symbol

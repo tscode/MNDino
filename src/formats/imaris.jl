@@ -13,7 +13,7 @@ end
 Open the `.ims` file located at `path`.
 """
 function ImarisFile(path::String)
-  return ImarisFile(path, h5open(path, "r"))
+  return ImarisFile(path, HDF5.h5open(path, "r"))
 end
 
 extensions(::Type{ImarisFile}) = [".ims"]
@@ -28,7 +28,7 @@ function zindexdefault(ims::ImarisFile)
 end
 
 function parseattribute(T, group, name::String)
-  return parseattribute(T, read_attribute(group, name))
+  return parseattribute(T, HDF5.read_attribute(group, name))
 end
 
 parseattribute(T, attrib::Vector{String}) = parse(T, join(attrib))
@@ -36,8 +36,8 @@ parseattribute(::Type{String}, attrib::Vector{String}) = join(attrib)
 
 function parseattribute(::Type{RGB}, attrib::Vector{String})
   rgb = split(join(attrib), " ")
-  r, g, b = parse.(Float64, rgb)
-  return RGB{Float16}(r, g, b)
+  r, g, b = parse.(Float32, rgb)
+  return RGBf(r, g, b)
 end
 
 function nzlayers(img::ImarisFile)
@@ -65,56 +65,41 @@ function variants(ims::ImarisFile)
   return (; resolution)
 end
 
-function channelname(img::ImarisFile, cindex)
-  meta = metadata(img, cindex)
-  return meta.name
-end
-
-function channelcolor(img::ImarisFile, cindex)
-  meta = metadata(img, cindex)
-  return meta.color
-end
-
-function channelnames(img::ImarisFile)
-  return map(1:nchannels(img)) do cindex
-    return channelname(img, cindex)
-  end
-end
-
-function channelcolors(img::ImarisFile)
-  return map(1:nchannels(img)) do cindex
-    return channelcolor(img, cindex)
-  end
-end
-
-function metadata(
-  img::ImarisFile,
-  cindex;
-  resolution = variantdefault(img).resolution,
-)
+function metadata(img::ImarisFile; resolution = variantdefault(img).resolution)
   info_group = img.hdf5["DataSetInfo"]
   data_group = img.hdf5["DataSet/ResolutionLevel $resolution/TimePoint 0"]
 
-  info_c = info_group["Channel $(cindex - 1)"]
-  data_c = data_group["Channel $(cindex - 1)"]
+  cmeta = map(1:nchannels(img)) do cindex
+    info_c = info_group["Channel $(cindex - 1)"]
+    data_c = data_group["Channel $(cindex - 1)"]
 
-  return (
-    cindex = cindex,
-    resolution = resolution,
-    time = time,
-    name = parseattribute(String, info_c, "Name"),
-    color = parseattribute(RGB, info_c, "Color"),
-    opacity = parseattribute(Float64, info_c, "ColorOpacity"),
+    cindex = cindex
+    name = parseattribute(String, info_c, "Name")
+    color = parseattribute(RGB, info_c, "Color")
+    opacity = parseattribute(Float64, info_c, "ColorOpacity")
     size = (
       parseattribute(Int, data_c, "ImageSizeX"),
       parseattribute(Int, data_c, "ImageSizeY"),
       parseattribute(Int, data_c, "ImageSizeZ"),
-    ),
+    )
     extrema = (
       parseattribute(Float64, data_c, "HistogramMin"),
       parseattribute(Float64, data_c, "HistogramMax"),
-    ),
+    )
+    return (; cindex, name, color, opacity, size, extrema)
+  end
+
+  return (
+    resolution = cmeta[1].size[1:2],
+    channels = cmeta,
   )
+end
+
+function channels(img::ImarisFile)
+  return map(metadata(img).channels) do c
+    @show c
+    Channel(c.cindex, c.name, c.color)
+  end
 end
 
 function imagedata(
@@ -135,17 +120,7 @@ function imagedata(
     img.hdf5["DataSet/ResolutionLevel $resolution/TimePoint $(tindex - 1)"]
   data = data_group["Channel $(cindex - 1)/Data"]
 
-  # Internal consistency checks
-  meta = metadata(img, cindex; resolution)
-  if meta.size[1:2] != size(data)[1:2]
-    @warn """
-    Internal resolution mismatch ($(meta.size[1:2]) vs. $(size(data)[1:2])).
-    """
-  end
-  @assert meta.size[3] <= size(data)[3] """
-  Wrong number of Z layers in metadata.
-  """
   return data[:, :, zindex]
 end
 
-register_format!(ImarisFile)
+registerformat!(ImarisFile)

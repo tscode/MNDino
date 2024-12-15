@@ -1,23 +1,46 @@
 
 """
-Widget that provides basic comparison, drawing, and segmentation functionality
-for `ChannelViewWidiget`s.
+Storage for one mask per mask channel.
+"""
+struct MaskData <: Storable
+  masks::OrderedDict{Int, BitMatrix}
+end
+
+MaskData() = MaskData(OrderedDict{Int, BitMatrix}())
+
+"""
+Widget that extends a [`ChannelViewWidget`] by adding mask drawing and
+segmentation functionality.
 """
 struct ChannelViewMaskWidget <: Widget
   title::String
+  mask_channels::Vector{Channel}
   parent::Symbol
   image_store::Symbol
   variable_store::Symbol
 end
 
-function ChannelViewMaskWidget(title = ""; parent, image_store, variable_store)
-  return ChannelViewMaskWidget(title, parent, image_store, variable_store)
+function ChannelViewMaskWidget(
+  title = "";
+  parent,
+  image_store,
+  variable_store,
+)
+  return ChannelViewMaskWidget(
+    title,
+    [],
+    parent,
+    image_store,
+    variable_store,
+  )
 end
 
+# TODO: Support mask channels that are independent from image channels
 function initcontext(widget::ChannelViewMaskWidget, ctx)
   wctx = Dict{Union{Int, Symbol}, Any}()
 
   loadentries!(wctx, widget, [:title]; obs = true)
+  loadentries!(wctx, widget, [:mask_channels]; obs = false)
   loadentries!(
     wctx,
     widget,
@@ -35,11 +58,15 @@ function initcontext(widget::ChannelViewMaskWidget, ctx)
 
   # Derive entries from the parent channel view
   cctx = loadcontext(ctx, wctx[:parent])
-  wctx[:mouse_position] = cctx[:mouse_position]
-  wctx[:focused] = cctx[:focused]
+
+  # TODO: Actually use mask_channels
+  if isempty(wctx[:mask_channels])
+    wctx[:mask_channels] = cctx[:channels]
+  end
+
   wctx[:nchannels] = cctx[:nchannels]
   wctx[:nmasks] = cctx[:nchannels]
-
+  
   for index in 1:wctx[:nchannels]
     wctx[index] = Dict{Symbol, Any}()
     wctx[index][:data] = cctx[index][:data]
@@ -58,23 +85,22 @@ function initcontext(widget::ChannelViewMaskWidget, ctx)
     addvariable!(vars, "S$index", wctx[index][:mask])
   end
 
+  wctx[:mouse_position] = cctx[:mouse_position]
+  wctx[:focused] = cctx[:focused]
 
   update_store = prev -> begin
     if !haskey(shelf, prev.id)
-      shelf[prev.id] = Dict{Int, BitMatrix}()
+      shelf[prev.id] = MaskData()
     end
     for index in 1:wctx[:nchannels]
-      shelf[prev.id][index] = copy(wctx[index][:mask][])
+      shelf[prev.id].masks[index] = copy(wctx[index][:mask][])
     end
   end
-
-  on(update_store, store[:update])
-  on(update_store, store[:change_from])
 
   load_next = next -> begin
     for index in 1:wctx[:nchannels]
       if haskey(shelf, next.id)
-        wctx[index][:mask][] = shelf[next.id][index]
+        wctx[index][:mask][] = shelf[next.id].masks[index]
       else
         sz = wctx[index][:size][]
         mask = BitMatrix(undef, sz)
@@ -84,6 +110,8 @@ function initcontext(widget::ChannelViewMaskWidget, ctx)
     end
   end
 
+  on(update_store, store[:update])
+  on(update_store, store[:change_from])
   on(load_next, store[:change_to]; update = true)
 
   wctx[:pointer_on] = Observable(true)
@@ -383,8 +411,8 @@ end
 function plotwidget(::ChannelViewMaskWidget, layout, wctx, theme)
   rowgap!(layout, 2, 20)
 
-  ca = theme[:color_button_up]
-  cb = theme[:color_button_down]
+  ca = RGBf(0.94, 0.94, 0.94)
+  cb = Makie.COLOR_ACCENT[]
   _decide(a, b) = bool -> bool ? a : b
 
   pointer_button = Button(

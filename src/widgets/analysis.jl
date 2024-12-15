@@ -6,8 +6,8 @@ struct AnalysisWidget <: Widget
   variable_store::Symbol
 end
 
-function AnalysisWidget(title; image_store, variable_store)
-  return AnalysisWidget(title, "", image_store, variable_store)
+function AnalysisWidget(title; script_path = "", image_store, variable_store)
+  return AnalysisWidget(title, script_path, image_store, variable_store)
 end
 
 function initcontext(widget::AnalysisWidget, ctx)

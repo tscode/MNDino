@@ -12,15 +12,14 @@ function default_theme()
     :cornerradius => 6,
     :rowgap => 7,
     :colgap => 10,
-    :color_button_down => Makie.COLOR_ACCENT[],
-    :color_button_up => RGBf(0.94, 0.94, 0.94),
+    # TODO: What about packing colors in the theme?
+    # :color_button_down => Makie.COLOR_ACCENT[],
+    # :color_button_up => RGBf(0.94, 0.94, 0.94),
   )
 end
 
 function default_paths()
-  return [
-    "data/Cell_with_dye.jpg",
-  ]
+  return ["data/Cell_with_dye.jpg"]
 end
 
 function runproject(project::Project; wait = false, size = (1200, 1000))
@@ -73,9 +72,9 @@ function runproject(project::Project; wait = false, size = (1200, 1000))
 end
 
 function filterlist()
-  images = map([ImarisFile, CommonImageFile]) do F
+  images = map([ImarisFile, CommonImageFile, OmeTiffFile]) do F
     exts = map(ext -> ext[2:end], extensions(F))
-    join(exts, ",")
+    return join(exts, ",")
   end
   images = join(images, ";")
   return "*;dino;$images"
@@ -89,11 +88,14 @@ function welcome()
   elseif length(paths) == 1 && splitext(paths[1])[2] == ".dino"
     project = loadproject(paths[1])
     @info "Project file $(paths[1]) has been loaded"
-  elseif all(p -> splitext(p)[2] in extensions(ImarisFile), paths)
+  elseif all(p -> fitsextension(p, ImarisFile), paths)
     project = newproject(; paths)
-    @info "New project with $(length(paths)) imaris files has been created"
-  elseif all(p -> splitext(p)[2] in extensions(CommonImageFile), paths)
+    @info "New project with $(length(paths)) Imaris files has been created"
+  elseif all(p -> fitsextension(p, CommonImageFile), paths)
     @info "New project with $(length(paths)) image files has been created"
+    project = newproject(; paths)
+  elseif all(p -> fitsextension(p, OmeTiffFile), paths)
+    @info "New project with $(length(paths)) OMETIFF files has been created"
     project = newproject(; paths)
   else
     @warn "Some of the provided files are not valid image files. Exiting"
@@ -108,7 +110,7 @@ function newproject(;
   theme = default_theme(),
   paths = default_paths(),
 )
-  project = Project(name, paths; theme = theme)
+  project = Project(name; theme = theme)
 
   addprovider!(project, :images) do
     return ImageStore(paths)

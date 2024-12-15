@@ -2,15 +2,15 @@
 """
 Support for common image formats like PNG or JPG via ImageIO.jl.
 
-Images are loaded into memory in greedily. Large images should
-use a different backend.
+Images are loaded into memory greedily. Large images should therefore use a
+different backend.
 
 Note that slices along a potential third axis (e.g., for GIF files) are
 interpreted as time frames and not as z stacks.
 """
 struct CommonImageFile{C <: Colors.Color} <: ImageFile
   path::String
-  data::Array{C, 3}
+  data::Array{C, 4}
 end
 
 function CommonImageFile(path::String)
@@ -48,9 +48,7 @@ channelnames(::CommonImageFile{<:ARGB}) = ["Alpha", "Red", "Green", "Blue"]
 
 ## TODO: Support more colorants!
 function channelnames(::CommonImageFile{C}) where {C}
-  return error(
-    "Colorant $C currently not supported by CommonImageFile backend.",
-  )
+  return error("Colorant $C not supported by the common image backend.")
 end
 
 channelcolors(::CommonImageFile{<:Gray}) = RGB(0.0, 0.0, 0.0)
@@ -84,17 +82,18 @@ function channelcolors(::CommonImageFile{C}) where {C}
   )
 end
 
-channelname(img::CommonImageFile, cindex) = channelnames(img)[cindex]
-channelcolor(img::CommonImageFile, cindex) = channelcolors(img)[cindex]
+function channels(img::CommonImageFile) 
+  ns = channelnames(img)
+  cs = channelcolors(img)
+  return map(enumerate(zip(ns, cs))) do (cindex, (name, color))
+    Channel(cindex, name, color)
+  end
+end
 
-function metadata(img::CommonImageFile, cindex)
-  resolution = size(img.data)
+function metadata(img::CommonImageFile)
   return (
-    cindex = cindex,
-    resolution = size(img.data),
-    name = channelname(img, cindex),
-    color = channelcolor(img, cindex),
-    size = size(img.data),
+    resolution = size(img.data)[1:2],
+    channels = channels(img),
   )
 end
 
@@ -110,7 +109,9 @@ function imagedata(img::CommonImageFile, cindex, zindex, tindex)
   @assert 1 <= tindex <= ntlayers(img) """
   Invalid T index $tindex.
   """
-  return @view imagedata(img)[cindex, :, :, zindex, tindex]
+  data = ImageCore.channelview(img.data)
+  slice = @view data[cindex, :, :, zindex, tindex]
+  return slice
 end
 
-register_format!(CommonImageFile)
+registerformat!(CommonImageFile)

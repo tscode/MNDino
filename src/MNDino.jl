@@ -1,24 +1,20 @@
+
 module MNDino
 
-using Serialization
 using Statistics
-using DelimitedFiles
+using Dates
 
-using Observables
-using Makie
-using Makie.GridLayoutBase: Outer
+using OrderedCollections
 
-using GZip # Reduce the size of project files greatly
-
-# Imaris file format support
-using HDF5
+# Saving and loading projects in gzipped msgpack
+using Pack
+using GZip
+using Serialization # To be removed
 
 # Support for common images
-import ImageIO
-import FileIO
-
-# Opening and saving files
-import NativeFileDialog
+import ImageIO, FileIO    # CommonImageFile (JPG, PNG, GIF)
+import HDF5               # ImarisFile (Imaris .ims format)
+import TiffImages, XML    # OmeTiffFile (OMETIFF .ome.tiff format)
 
 # Image operations
 using Colors
@@ -28,8 +24,16 @@ import ImageTransformations
 import ImageSegmentation
 import ImageMorphology
 
+# Plotting / GUI framework
+using Makie
+using Makie.GridLayoutBase: Outer
+using Observables
 
-include("patches/dragpan.jl")
+# Opening and saving files
+import NativeFileDialog
+
+# Exporting analysis results as CSV
+using DelimitedFiles
 
 function linkobservables(a, b)
   on(a, update = true) do val
@@ -76,6 +80,9 @@ function desaturate(color::C, factor) where {C <: Color}
   return C(hsv)
 end
 
+# Makie "patch" to move dragpan to the *left* mouse button
+include("patches/dragpan.jl")
+
 include("imagefile.jl")
 include("filter.jl")
 
@@ -84,15 +91,16 @@ include("widget.jl")
 include("project.jl")
 include("dinoscript.jl")
 
-# image format support
+# Supported image formats
 include("formats/common.jl")
 include("formats/imaris.jl")
+include("formats/ometiff.jl")
 
-# store providers
+# Store providers
 include("stores/image.jl")
 include("stores/variable.jl")
 
-# widgets
+# Widgets
 include("widgets/project.jl")
 include("widgets/imageselector.jl")
 include("widgets/channelview.jl")
@@ -100,6 +108,7 @@ include("widgets/channelviewmask.jl")
 include("widgets/segments.jl")
 include("widgets/analysis.jl")
 
+# Entry point to the GUI
 include("main.jl")
 
 end # module MNDino

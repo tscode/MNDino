@@ -1,15 +1,40 @@
 
+"""
+A storable quantity.
+
+Usually, a `Storable` contains information associated to an image and is stored
+inside of the [`Shelf`](@ref) of an [`ImageStore`](@ref).
+
+Each `Storable` must implement type aware `pack` / `unpack` routines since its
+information is expected to be serialized / deserialized when saving or loading
+projects.
+"""
+abstract type Storable end
+
+@pack Storable in Pack.TypedFormat{Pack.MapFormat}
+
+"""
+A shelf contains one `Storable` object per image id.
+
+Providers that want to make use of an `ImageStore` can receive shelves during
+context initialization via [`addshelf!`](@ref).
+"""
+const Shelf = OrderedDict{Int, Storable}
+
+"""
+Image descriptor exposed by the ImageStore.
+"""
 struct ImageDescriptor
   id::Int
   path::String
   image::ImageFile
 end
 
-function ImageDescriptor(id, path :: String)
+function ImageDescriptor(id, path::String)
   return ImageDescriptor(id, path, loadimagefile(path))
 end
 
-function ImageDescriptor(id, image :: ImageFile)
+function ImageDescriptor(id, image::ImageFile)
   return ImageDescriptor(id, location(image), image)
 end
 
@@ -28,22 +53,23 @@ end
 """
 An image store.
 
-Keeps track of a number of loaded images as well as an active or selected image.
-Other providers can save permanent metadata for each image, meaning that this
-data survives the runtime.
+Keeps track of a number of loaded images as well as an active / selected image.
+Other providers can save permanent metadata for each image by making use of
+shelves (see [`addshelf!`](@ref)). Data stored in the shelves of an image store
+is meant to survive the runtime.
 """
 struct ImageStore <: Provider
   ids::Vector{Int}
   paths::Vector{String}
-  shelfs::Dict{Symbol, Dict}
+  shelfs::OrderedDict{Symbol, Shelf}
   active_index::Int
 end
 
-function ImageStore(paths :: Vector{String})
+function ImageStore(paths::Vector{String})
   return ImageStore(
     collect(1:length(paths)),
     paths,
-    Dict{Symbol, Dict}(),
+    OrderedDict{Symbol, Shelf}(),
     isempty(paths) ? -1 : 1,
   )
 end
@@ -56,47 +82,44 @@ function initcontext(store::ImageStore, ctx)
   pctx[:ids] = lift(entries -> getfield.(entries, :id), pctx[:entries])
   pctx[:paths] = lift(entries -> location.(entries), pctx[:entries])
 
-  # For interal purposes
+  # private: for interal purposes
   pctx[:shelfs] = store.shelfs
 
-  # Changing this observable to a valid entry id will change the active entry
+  # public (set): Changing this observable to a valid entry id will change the active entry
   pctx[:select_id] = Observable(-1)
 
-  # Changing this observable to a valid entry index will change the active entry
-  # Do not listen to this observable
+  # public (set): Changing this observable to a valid entry index will change the active entry
   pctx[:select_index] = Observable(-1)
 
-  # Notifying one of these observables will jump to the first or last entry
-  # Do not listen to these observables
+  # public (set): Notifying one of these observables will jump to the first or last entry
   pctx[:select_first] = Observable(nothing)
   pctx[:select_last] = Observable(nothing)
 
-  # Notifying one of these observables will move the selected entry up or down
-  # Do not listen to these observables
+  # public (set): Notifying one of these observables will move the selected entry up or down
   pctx[:select_prev] = Observable(nothing)
   pctx[:select_next] = Observable(nothing)
 
-  # The id of the active entry. Can be -1 if nothing is selected
+  # public (get): The id of the active entry. Can be -1 if nothing is selected
   pctx[:active_id] = Observable(-1)
 
-  # The index of the active entry. Can be -1 if nothing is selected
+  # public (get): The index of the active entry. Can be -1 if nothing is selected
   pctx[:active_index] = Observable(-1)
 
-  # Used to cleanly create entry changes. For internal purposes only.
+  # private: Used to cleanly create entry changes. For internal purposes only.
   pctx[:activate_id] = Observable(-1)
   pctx[:recent_id] = Observable(-1)
 
-  # Stores the currently active shelfs of the store. For interal purposes.
+  # private: Stores the currently active shelfs of the store. For interal purposes.
   pctx[:shelfkeys] = Symbol[]
 
   on(pctx[:select_first]) do _
-    pctx[:select_index][] = 1
+    return pctx[:select_index][] = 1
   end
 
   on(pctx[:select_last]) do _
-    pctx[:select_index][] = length(pctx[:entries][])
+    return pctx[:select_index][] = length(pctx[:entries][])
   end
-    
+
   on(pctx[:select_prev]) do _
     if pctx[:active_index][] > 1
       pctx[:select_index][] = pctx[:select_index][] - 1
@@ -134,25 +157,39 @@ function initcontext(store::ImageStore, ctx)
       pctx[:active_index][] = index
     end
   end
-  
 
+  # public (get)
   # Listen to this to get notified of changes in the entry.
   # Happens BEFORE pctx[:change], pctx[:change_to], but AFTER pctx[:change_from]
   pctx[:entry] = Observable{Union{Nothing, ImageDescriptor}}(nothing)
 
+  # public (get)
+  # Observable pointing to the current image. Updated when pctx[:entry] is
+  # updated.
+  pctx[:image] = Observable{Union{Nothing, ImageFile}}(nothing)
+  pctx[:path] = Observable{Union{Nothing, String}}(nothing)
+
+  on(pctx[:entry]) do entry
+    if !isnothing(entry)
+      pctx[:image][] = imagefile(entry)
+      pctx[:path][] = location(entry)
+    end
+  end
+
+  # public (get)
   # Listen to this to get notified of change events in the entry
   pctx[:change] = Observable{Tuple}((nothing, nothing))
   pctx[:change_from] = Observable{Union{Nothing, ImageDescriptor}}(nothing)
   pctx[:change_to] = Observable{Union{Nothing, ImageDescriptor}}(nothing)
 
+  # public (get, set)
   # Listen or notify on this observable to handle or send store-update queries
-  pctx[:update] = Observable{Union{Nothing, ImageDescriptor}}(nothing)
+  pctx[:update] = Observable(nothing)
 
-  on(ctx[:update]) do _
-    pctx[:update][] = pctx[:entry][]
-  end
+  # Trigger update if a global context update is triggered
+  on(_ -> notify(pctx[:update]), ctx[:update])
 
-  on(pctx[:activate_id], update = true) do id
+  on(pctx[:activate_id]; update = true) do id
     entries = pctx[:entries][]
 
     index = findfirst(entry -> entry.id == id, entries)
@@ -164,7 +201,7 @@ function initcontext(store::ImageStore, ctx)
     pctx[:change_from][] = prev
     pctx[:entry][] = next
     pctx[:change_to][] = next
-    pctx[:change][] = (next, prev)
+    return pctx[:change][] = (next, prev)
   end
 
   on(pctx[:entries]) do entries
@@ -177,7 +214,7 @@ function initcontext(store::ImageStore, ctx)
     end
   end
 
-  # All dependencies set. Now select the correct index
+  # All dependencies are in place. Now select the correct initial index
   pctx[:select_index][] = store.active_index
 
   return pctx
@@ -200,7 +237,7 @@ function addshelf!(pctx, key)
   end
   push!(pctx[:shelfkeys], key)
   # Shelf could already exist from loading a populated store
-  pctx[:shelfs][key] = get(pctx[:shelfs], key, Dict())
+  pctx[:shelfs][key] = get(pctx[:shelfs], key, Shelf())
   return pctx[:shelfs][key]
 end
 
@@ -215,6 +252,7 @@ shelf = addshelf!(store, :mystuff) # gets me a dictionary per image in store
 # The store should not contain observables, but only quantities for which it
 # makes sense to store (and serialize / deserialize) them.
 
+# Here, the functions *_metadata have to return a Storable
 on(ctx[:store][:change]) do (next, prev)
   shelf[prev.id] = update_metadata(pctx)
   shelf[next.id] = haskey(self, next.id) ? load_metadata(pctx) : init_metadata(pctx)
