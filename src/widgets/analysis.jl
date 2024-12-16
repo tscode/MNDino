@@ -252,6 +252,7 @@ function _analysis_script(layout, wctx, theme)
   )
 
   on(wctx[:script_error]) do err
+    @error err
     @async begin
       if length(err) > 100
         msg_label.text[] = err[1:100] * " ..."

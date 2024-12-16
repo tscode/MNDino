@@ -11,7 +11,7 @@ projects.
 """
 abstract type Storable end
 
-@pack Storable in Pack.TypedFormat{Pack.MapFormat}
+@pack {<: Storable} in Pack.TypedFormat{Pack.MapFormat}
 
 """
 A shelf contains one `Storable` object per image id.

@@ -92,13 +92,13 @@ function plotwidget(::ImageSelectorWidget, layout, wctx, theme)
 
   Label(
     layout[3, 1],
-    "Z-Layers:",
+    "Resolution:",
     fontsize = theme[:fontsize],
     halign = :right,
   )
   Label(
     layout[3, 2],
-    lift(string, wctx[:nzlayers]),
+    lift(m -> string(m.resolution), wctx[:meta]),
     fontsize = theme[:fontsize],
     halign = :left,
     tellwidth = false,
@@ -106,13 +106,13 @@ function plotwidget(::ImageSelectorWidget, layout, wctx, theme)
 
   Label(
     layout[4, 1],
-    "Resolution:",
+    "Z-Layers:",
     fontsize = theme[:fontsize],
     halign = :right,
   )
   Label(
     layout[4, 2],
-    lift(m -> string(m.resolution), wctx[:meta]),
+    lift(string, wctx[:nzlayers]),
     fontsize = theme[:fontsize],
     halign = :left,
     tellwidth = false,

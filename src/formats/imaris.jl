@@ -97,7 +97,6 @@ end
 
 function channels(img::ImarisFile)
   return map(metadata(img).channels) do c
-    @show c
     Channel(c.cindex, c.name, c.color)
   end
 end

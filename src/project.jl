@@ -60,14 +60,17 @@ function initcontext(project::Project)
 end
 
 function updateproject(project, ctx)
-  providers = map(project.providers) do (key, provider)
-    return key => update(provider, ctx[:providers][key])
+  providers = OrderedDict{Symbol, Provider}()
+  for (key, provider) in project.providers
+    providers[key] = update(provider, ctx[:providers][key])
   end
   return Project(
+    getvalue(ctx, :version),
+    getvalue(ctx, :date),
     getvalue(ctx, :name),
     getvalue(ctx, :comment),
     getvalue(ctx, :theme),
-    OrderedDict(providers),
+    providers,
   )
 end
 

@@ -89,6 +89,9 @@ function initcontext(widget::ChannelViewMaskWidget, ctx)
   wctx[:focused] = cctx[:focused]
 
   update_store = prev -> begin
+    if isnothing(prev) # :update instead of :change_from
+      prev = store[:entry][]
+    end
     if !haskey(shelf, prev.id)
       shelf[prev.id] = MaskData()
     end
