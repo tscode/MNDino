@@ -8,14 +8,14 @@ different backend.
 Note that slices along a potential third axis (e.g., for GIF files) are
 interpreted as time frames and not as z stacks.
 """
-struct CommonImageFile{C <: Colors.Color} <: ImageFile
+struct CommonImageFile{C <: Colors.Colorant} <: ImageFile
   path::String
   data::Array{C, 4}
 end
 
 function CommonImageFile(path::String)
   data = FileIO.load(path)
-  @assert data isa Array{<:Colors.Color} """
+  @assert data isa Array{<:Colors.Colorant} """
   The specified path does not point to an image of proper array type.
   """
   @assert 2 <= length(size(data)) <= 3 """

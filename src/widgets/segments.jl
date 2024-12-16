@@ -16,12 +16,21 @@ function initcontext(widget::SegmentsWidget, ctx)
 
   wctx[:nmasks] = mpctx[:nmasks]
   wctx[:masks] = Dict{Int, Any}()
+  wctx[:size] = Observable{NTuple{2, Int}}(
+    (0, 0),
+    ignore_equal_values = true,
+  )
 
   for index in 1:wctx[:nmasks]
     wctx[:masks][index] = Dict{Symbol, Any}()
     wctx[:masks][index][:mask] = mpctx[index][:mask]
     wctx[:masks][index][:color] = mpctx[index][:color]
     wctx[:masks][index][:name] = mpctx[index][:name]
+    if index == 1
+      on(mpctx[index][:size]) do sz
+        wctx[:size][] = sz
+      end
+    end
   end
 
   return wctx
@@ -67,6 +76,10 @@ function _segments_showsegments(layout, wctx, theme)
         wctx[:masks][index][:color],
       ),
     )
+  end
+
+  on(wctx[:size]) do sz
+    ax.limits[] = ((0, sz[1]), (0, sz[2]))
   end
 
   sublayout = GridLayout(layout[2, 2], 3wctx[:nmasks], 1)

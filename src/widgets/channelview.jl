@@ -359,7 +359,6 @@ end
 
 function _channelview_slices(layout, yindex, wctx, theme)
   axes = map(1:wctx[:nchannels]) do index
-    # Box(layout[yindex, index]; color = (:black, 0.05), strokevisible = false)
     ax = Axis(
       layout[yindex, index];
       aspect = DataAspect(),
@@ -379,8 +378,9 @@ function _channelview_slices(layout, yindex, wctx, theme)
       colorrange = wctx[index][:crange],
       colormap = lift(c -> [:black, c], wctx[index][:color]),
     )
-    onany(wctx[:entry], wctx[index][:size]) do _, _
-      return reset_limits!(ax)
+    onany(wctx[:entry], wctx[index][:size]) do _, sz
+      ax.limits[] = ((0, sz[1]), (0, sz[2]))
+      return
     end
     wctx[index][:axis][] = ax
     return ax

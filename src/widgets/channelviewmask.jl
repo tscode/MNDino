@@ -76,11 +76,10 @@ function initcontext(widget::ChannelViewMaskWidget, ctx)
     wctx[index][:crange] = cctx[index][:crange]
     wctx[index][:name] = cctx[index][:name]
 
-    wctx[index][:mask] = lift(wctx[index][:size]) do sz
-      mask = BitMatrix(undef, sz)
-      mask .= false
-      return mask
-    end
+    # TODO: implement and handle resize events, e.g., when we want to change resolution globally
+    mask = BitMatrix(undef, cctx[index][:size][])
+    mask .= false
+    wctx[index][:mask] = Observable(mask)
 
     addvariable!(vars, "S$index", wctx[index][:mask])
   end
