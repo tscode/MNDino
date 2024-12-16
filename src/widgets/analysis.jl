@@ -198,8 +198,7 @@ function _analysis_topline(layout, wctx, theme)
   on(export_button.clicks) do _
     red = RGB(0.5, 0.2, 0.2)
     green = RGB(0.2, 0.4, 0.2)
-    # @async begin
-    begin
+    @async begin
       if isnothing(wctx[:script][])
         export_msg("no script loaded", red)
         return
