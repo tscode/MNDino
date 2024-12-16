@@ -115,7 +115,7 @@ function channels(img::OmeTiffFile)
       name = ch["Name"]
     else
       @warn """
-      Could not determine channel name. Fall back to 'Channel $cindex'
+      Could not determine channel name. Falling back to 'Channel $cindex'
       """
       name = "Channel $cindex"
     end

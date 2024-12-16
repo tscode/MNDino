@@ -101,16 +101,44 @@ function initproject(project, layouts; options)
 end
 
 """
+    packproject(project::Project)
+    packproject(io::IO, project::Project)
+
+Return or write a binary representation of `project`.
+"""
+function packproject(project::Project)
+  return Pack.pack(project)
+end
+
+function packproject(io::IO, project::Project)
+  return Pack.pack(io, project)
+end
+
+"""
+    unpackproject(bytes::Vector{UInt8})
+    unpackproject(io::IO)
+
+Unpack a project from its binary representation.
+"""
+function unpackproject(bytes::Vector{UInt8})
+  return Pack.unpack(bytes, Project)
+end
+
+function unpackproject(io::IO)
+  return Pack.unpack(io, Project)
+end
+
+"""
     saveproject(project, filename)
 
 Serialize `project` into the file `filename`.
 """
 function saveproject(project, filename::String)
-  file = GZip.open(filename, "w")
+  io = GZip.open(filename, "w")
   try
-    Serialization.serialize(file, project)
+    packproject(io, project)
   finally
-    close(file)
+    close(io)
   end
   return
 end
@@ -121,28 +149,11 @@ end
 Deserialize a project from the file `filename`.
 """
 function loadproject(filename::String)
-  file = GZip.open(filename, "r")
+  io = GZip.open(filename, "r")
   try
-    return Serialization.deserialize(file)
+    return unpackproject(io)
   finally
-    close(file)
+    close(io)
   end
 end
 
-"""
-    packproject(project::Project)
-
-Return a binary representation of `project`.
-"""
-function packproject(project::Project)
-  return Pack.pack(project)
-end
-
-"""
-    unpackproject(bytes::Vector{UInt8})
-
-Unpack a binary project representation to a project.
-"""
-function unpackproject(bytes::Vector{UInt8})
-  return Pack.unpack(bytes, Project)
-end
