@@ -13,8 +13,6 @@ function initcontext(widget::ProjectWidget, ctx)
   loadentries!(wctx, ctx, [:name, :comment, :update, :version, :date])
   loadentries!(wctx, widget; obs = true)
 
-  wctx[:path] = Observable{String}("")
-
   return wctx
 end
 
@@ -23,8 +21,9 @@ gridlayoutoptions(::ProjectWidget, wctx) = (size = (5, 2),)
 function plotwidget(::ProjectWidget, layout, wctx, theme)
   rowgap!(layout, 2, 10)
 
-  toplayout = GridLayout(layout[1, :], 1, 4)
+  toplayout = GridLayout(layout[1, :], 1, 5)
   colgap!(toplayout, 1, 5)
+  colgap!(toplayout, 4, 5)
 
   Label(
     toplayout[1, 1],
@@ -45,9 +44,25 @@ function plotwidget(::ProjectWidget, layout, wctx, theme)
     bordercolor = :transparent,
   )
 
+  save_label = Label(
+    toplayout[1, 3],
+    "";
+    halign = :right,
+    fontsize = theme[:fontsize],
+    tellwidth = false,
+  )
+
   save_button = Button(
     toplayout[1, 4];
-    label = "Save...",
+    label = "Save",
+    halign = :right,
+    fontsize = theme[:fontsize],
+    font = :bold,
+  )
+
+  saveas_button = Button(
+    toplayout[1, 5];
+    label = "Save as...",
     halign = :right,
     fontsize = theme[:fontsize],
     font = :bold,
@@ -62,17 +77,20 @@ function plotwidget(::ProjectWidget, layout, wctx, theme)
   )
 
   Label(layout[3, 1], "Path:"; fontsize = theme[:fontsize], halign = :right)
-  path = lift(wctx[:path]) do path
+ 
+  path_str = lift(wctx[:path]) do path
     return length(path) > 75 ? "..." * path[(end - 75):end] : path
   end
+
   path_label = Label(
     layout[3, 2],
-    isempty(path[]) ? "<unsaved>" : path[];
+    isempty(path_str[]) ? "<unsaved>" : path_str[];
     fontsize = theme[:fontsize],
     halign = :left,
   )
 
   Label(layout[4, 1], "Comment:"; fontsize = theme[:fontsize], halign = :right)
+
   comment_box = Textbox(
     layout[4, 2];
     stored_string = isempty(wctx[:comment][]) ? nothing : wctx[:comment][],
@@ -87,30 +105,56 @@ function plotwidget(::ProjectWidget, layout, wctx, theme)
     return wctx[:name][] = isnothing(str) ? "" : str
   end
 
+  path = Ref(wctx[:path][])
+
   on(save_button.clicks) do _
-    @async begin
-      path = NativeFileDialog.save_file(; filterlist = "dino")
-      old_path = wctx[:path][]
-      wctx[:path][] = path
+    if isempty(path[])
+      fadelabel(save_label, "No file selected", colorant"darkgray")
+      return
+    elseif !isfile(path[])
+      fadelabel(save_label, "File $(path[]) not valid", colorant"red")
+      return
+    end
+    try
       notify(wctx[:update])
-      ctx = wctx[:ctx]
-      project = updateproject(ctx[:project], wctx[:ctx])
-      try
-        saveproject(project, path)
-      catch err
-        @error err
-        path_label.text[] = "Saving failed"
-        path_label.color = :darkred
-        wctx[:path][] = old_path
-        return
-      end
-      path_label.text[] = path
-      path_label.color = :black
+      project = updateproject(wctx[:ctx][:project], wctx[:ctx])
+      saveproject(project, path[])
+      wctx[:path][] = path[]
+      fadelabel(save_label, "Project saved", colorant"darkgreen")
+    catch err
+      @error err
+      fadelabel(save_label, "Saving failed", colorant"darkred")
+    end
+  end
+
+  on(saveas_button.clicks) do _
+    @async begin
+      path[] = NativeFileDialog.save_file(; filterlist = "dino")
+      notify(save_button.clicks)
     end
     return
   end
 
   on(comment_box.stored_string) do comment
     return wctx[:comment][] = comment
+  end
+
+  # Save by clicking ctrl+s
+  events = Makie.events(layout[1,1])
+  on(events.keyboardbutton) do event
+    event.action != Keyboard.press && return
+
+    scene = Makie.get_scene(layout[1, 1])
+    lctrl = Keyboard.left_control
+    rctrl = Keyboard.right_control
+
+    if event.key == Keyboard.s &&
+      (ispressed(scene, lctrl) || ispressed(scene, rctrl))
+      if path[] == ""
+        notify(saveas_button.clicks)
+      else
+        notify(save_button.clicks)
+      end
+    end
   end
 end

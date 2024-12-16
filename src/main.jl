@@ -132,7 +132,7 @@ function newproject(;
 
   addprovider!(project, :view) do
     return ChannelViewWidget(
-      "Channel View";
+      "Channels";
       image_store = :images,
       variable_store = :variables,
     )

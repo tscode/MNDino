@@ -35,7 +35,7 @@ function initcontext(widget::AnalysisWidget, ctx)
 
   # Store the export function that requires access to the global context
   wctx[:export] =
-    () -> begin
+    callback -> begin
       isnothing(wctx[:script][]) && return
       notify(ctx[:update])
       project = updateproject(ctx[:project], ctx)
@@ -45,6 +45,7 @@ function initcontext(widget::AnalysisWidget, ctx)
         image_store = wctx[:image_store],
         variable_store = wctx[:variable_store],
         variables = [:zindex],
+        callback,
       )
     end
 
@@ -173,7 +174,7 @@ function _analysis_topline(layout, wctx, theme)
 
   colgap!(layout, 3, 5)
   colgap!(layout, 4, 15)
-  colgap!(layout, 5, 15)
+  colgap!(layout, 5, 5)
 
   on(live_toggle.active; update = true) do live
     wctx[:live][] = live
@@ -200,24 +201,25 @@ function _analysis_topline(layout, wctx, theme)
     green = RGB(0.2, 0.4, 0.2)
     @async begin
       if isnothing(wctx[:script][])
-        export_msg("no script loaded", red)
+        fadelabel(export_label, "no script loaded", colorant"darkred")
         return
       end
       path = NativeFileDialog.save_file(; filterlist = "csv")
       if path == ""
-        export_msg("export aborted", red)
+        fadelabel(export_label, "export aborted", colorant"darkred")
         return
       end
       try
-        task = Threads.@spawn wctx[:export]()
+        cb = (i, n) -> export_label.text[] = "exporting... ($i / $n)"
+        task = Threads.@spawn wctx[:export](cb)
         names, data = fetch(task)
         open(path, "w") do io
           println(io, join(names, ","))
           return writedlm(io, data, ',')
         end
-        export_msg("export successful", green)
+        fadelabel(export_label, "export successful", colorant"darkgreen")
       catch err
-        export_msg("export failed", red)
+        fadelabel(export_label, "export failed", colorant"darkred")
       end
     end
   end

@@ -81,6 +81,15 @@ function desaturate(color::C, factor) where {C <: Color}
   return C(hsv)
 end
 
+function fadelabel(label, msg, color = colorant"black"; duration = 5)
+  @async begin
+    label.color[] = color
+    label.text[] = msg
+    sleep(duration)
+    label.text[] = ""
+  end
+end
+
 # Makie "patch" to move dragpan to the *left* mouse button
 include("patches/dragpan.jl")
 
