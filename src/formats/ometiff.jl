@@ -19,7 +19,12 @@ end
 function _ometiff_pixels(xml)
   for node in xml
     if XML.tag(node) == "Pixels"
-      return XML.attributes(node)
+      attribs = XML.attributes(node)
+      order = attribs["DimensionOrder"]
+      @assert order[1:2] in ["XY", "YX"] """
+      Dimension order $order is not supported. Must start with X and Y.
+      """
+      return attribs
     end
   end
 end
@@ -33,14 +38,14 @@ function _ometiff_channels(xml)
   end
   nchannels = parse(Int, _ometiff_pixels(xml)["SizeC"])
   @assert length(channels) == nchannels """
-  Found more channel XML entries than expected
+  Found more channel XML entries than expected.
   """
   # Make sure that we can read the ids and
   # that they are stored in the right order
   ids = map(channels) do channel
     m = match(r"Channel:[0-9]+:([0-9]+)", channel["ID"])
     @assert !isnothing(m) """
-    Could not determine channel id (ID $(channel["ID"]))
+    Could not determine channel id (ID $(channel["ID"])).
     """
     return m[1]
   end
@@ -61,27 +66,27 @@ function OmeTiffFile(path::String)
   xml = _ometiff_omexml(tiff)
   pixels = _ometiff_pixels(xml)
   channels = _ometiff_channels(xml)
-  order = DimensionOrder(pixels["DimensionOrder"])
 
+  # After previous attempts interchanged the X and Y axes, I found this:
+  #  https://github.com/tlnagy/OMETIFF.jl/blob/a58e9369da47d02295120dbe3f1af852adf75be4/src/parsing.jl#L170C1-L170C85
+  # Apparently, YX... gives the right specification for 2D slices for colum-major languages. That is, SizeY describes the length of the axis tightest in memory while SizeX corresponds to the second tightest.
+  ostr = "YX" * pixels["DimensionOrder"][3:end]
+  order = DimensionOrder(ostr)
   sz = map(("SizeX", "SizeY", "SizeZ", "SizeC", "SizeT")) do key
     return parse(Int, pixels[key])
   end
-
-  # We always expect the first two dimensions to correspond to XY or YX
-  @assert prod(sz[1:2]) == prod(size(tiff)[1:2]) """
-  Inconsistency of XY dimensions between metadata and loaded tiff image
+  sz = orderdims(sz, order)
+  # We always expect that TiffImages has gotten the first two dimensions right
+  @assert sz[1:2] == size(tiff)[1:2] """
+  Inconsistency of XY dimensions between metadata and loaded tiff image.
   """
   @assert prod(sz) == prod(size(tiff)) """
-  Inconsistency between shape metadata and loaded tiff image
+  Inconsistency between shape metadata and loaded tiff image.
   """
-  sz = orderdims(sz, order)
   tiff = reshape(tiff, sz)
-  @show sz
   dims = (order.x, order.y, order.z, order.c, order.t)
-  @assert sz == size(tiff) """
-  Inconsistency while permuting array dimensions
-  """
   tiff = PermutedDimsArray(tiff, dims)
+
   return OmeTiffFile(path, pixels, channels, order, tiff)
 end
 
@@ -133,7 +138,7 @@ function metadata(img::OmeTiffFile)
   )
 end
 
-function imagedata(img::OmeTiffFile, cindex, zindex, tindex)
+function imagedata(img::OmeTiffFile, zindex, cindex, tindex)
   slice = @view img.tiff[:, :, zindex, cindex, tindex]
   slice = ImageCore.channelview(slice) # remove color wrapper (Gray)
   slice = reinterpret.(slice) # remove Normed FixedPointNumber

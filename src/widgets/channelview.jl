@@ -91,7 +91,7 @@ function initcontext(widget::ChannelViewWidget, ctx)
       # TODO: The variant will eventually come from the selection widget!
       variant = (;)
       return Float32.(
-        imagedata(img, c.cindex, view.zindex, view.tindex; variant...)
+        imagedata(img, view.zindex, c.cindex, view.tindex; variant...)
       )
     end
     data_f = lift((f, data) -> f(data), wctx[:filter], data)

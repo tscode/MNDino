@@ -248,10 +248,10 @@ Additional keyword arguments specify the variant of `img`.
 
 ---
 
-    imagedata(img::ImageFile, cindex, zindex, tindex; kwargs...)
+    imagedata(img::ImageFile, zindex, cindex, tindex; kwargs...)
 
-Retrieve the 2d slice of image data stored at a given index for the channel, z
-dimension, and time dimension.
+Retrieve the 2d XY slice of image data stored at a given index for the Z,
+channel, and time dimension.
 
 Additional keyword arguments specify the variant of `img`.
 """

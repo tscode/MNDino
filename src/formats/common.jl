@@ -99,7 +99,7 @@ end
 
 imagedata(img::CommonImageFile) = ImageCore.channelview(img.data)
 
-function imagedata(img::CommonImageFile, cindex, zindex, tindex)
+function imagedata(img::CommonImageFile, zindex, cindex, tindex)
   @assert 1 <= cindex <= nchannels(img) """
   Invalid channel index $cindex.
   """

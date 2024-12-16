@@ -104,8 +104,8 @@ end
 
 function imagedata(
   img::ImarisFile,
-  cindex,
   zindex,
+  cindex,
   tindex;
   resolution = variantdefault(img).resolution,
 )
