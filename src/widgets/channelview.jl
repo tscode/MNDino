@@ -297,6 +297,9 @@ function _channelview_histograms(layout, yindex, wctx, theme)
 
   axes = map(1:nchannels) do index
     limits = lift(wctx[index][:extrema]) do minmax
+      if minmax[1] == minmax[2] # prevent degenerate axis limits
+        minmax = (minmax[1] - 1f-5, minmax[2] + 1f-5)
+      end
       return (minmax, (0, nothing))
     end
     values = lift(wctx[index][:data]) do data

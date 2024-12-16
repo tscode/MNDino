@@ -3,6 +3,7 @@ module MNDino
 
 using Statistics
 using Dates
+using PrecompileTools
 
 using OrderedCollections
 
@@ -110,5 +111,8 @@ include("widgets/analysis.jl")
 
 # Entry point to the GUI
 include("main.jl")
+
+# Precompilation statements to reduce startup time
+include("precompile.jl")
 
 end # module MNDino

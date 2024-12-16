@@ -22,7 +22,7 @@ function default_paths()
   return ["data/Cell_with_dye.jpg"]
 end
 
-function runproject(project::Project; wait = false, size = (1200, 1000))
+function runproject(project::Project; wait = false, size = (1200, 1000), display = true)
   fig = Figure(; size, backgroundcolor = :lightgray)
 
   layout_project = GridLayout(fig[1, 1]; alignmode = Outside(15), valign = :top)
@@ -61,11 +61,13 @@ function runproject(project::Project; wait = false, size = (1200, 1000))
 
   ctx = initproject(project, layouts; options = (:mask => (framepadding = 5,)))
 
-  version = pkgversion(MNDino)
-  GLMakie.activate!(; title = "MNDino v$version")
-  screen = display(fig)
-  if wait
-    Base.wait(screen)
+  if display
+    version = pkgversion(MNDino)
+    GLMakie.activate!(; title = "MNDino v$version")
+    screen = Base.display(fig)
+    if wait
+      Base.wait(screen)
+    end
   end
 
   return ctx
