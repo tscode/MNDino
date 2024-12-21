@@ -37,6 +37,7 @@ variantdefault(::CommonImageFile) = (;)
 zindexdefault(img::CommonImageFile) = 1
 tindexdefault(img::CommonImageFile) = 1
 
+planesize(img::CommonImageFile) = size(img.data, 1:2)
 nzlayers(img::CommonImageFile) = size(img.data, 3)
 ntlayers(img::CommonImageFile) = size(img.data, 4)
 nchannels(::CommonImageFile{C}) where {C} = length(C)

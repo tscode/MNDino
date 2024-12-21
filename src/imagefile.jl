@@ -1,5 +1,4 @@
 
-
 """
 Default channel colors if they cannot be derived from metadata.
 """
@@ -15,7 +14,6 @@ function _getcolor(index)
   index = mod1(index, length(_default_colors))
   return _default_colors[index]
 end
-
 
 """
 Metadata object for an image channel.
@@ -82,7 +80,7 @@ ordering defined by `order`.
 """
 function orderdims(s, order::DimensionOrder)
   pairs = map(k -> k => getfield(order, k), [:x, :y, :z, :c, :t])
-  perm = sortperm(pairs, by = pair -> pair[2])
+  perm = sortperm(pairs; by = pair -> pair[2])
   filter!(index -> pairs[index][2] != 0, perm)
   return Tuple(s[index] for index in perm)
 end
@@ -118,25 +116,50 @@ end
 
 """
     extensions(I::Type{<: ImageFile}) 
-    extensions(img::ImageFile) 
+    extensions(::I) where {I <: ImageFile} 
 
-List of supported file extensions for the image file backend I.
+List of supported file extensions for the image file backend `I`.
 """
 extensions(::I) where {I <: ImageFile} = extensions(I)
 
 """
     nchannels(img::ImageFile)
 
-Return the number of channels of `img`.
+Return the number of channels in `img`..
 """
 function nchannels end
 
 """
     nzlayers(img::ImageFile)
 
-Return the number of Z-layers of `img`
+Return the number of Z-layers in `img`.
 """
 function nzlayers end
+
+"""
+    ntlayers(img::ImageFile)
+
+Return the number of time layers in `img`.
+"""
+function ntlayers end
+
+"""
+    nplanes(img::ImageFile)
+
+Return the number of XY planes stored in `img`.
+
+Equals `nchannels(img) * nzlayers(img) * ntlayers(img)`.
+"""
+function nplanes(img::ImageFile)
+  return nchannels(img) * nzlayers(img) * ntlayers(img)
+end
+
+"""
+    planesize(img::ImageFile; kwargs...)
+
+Return the size of the XY planes in the image.
+"""
+function planesize end
 
 """
     variants(img::ImageFile)
@@ -258,9 +281,9 @@ Additional keyword arguments specify the variant of `img`.
 function imagedata end
 
 function imagedata(img::I; kwargs...) where {I <: ImageFile}
-  error("""
-  Image file backend $I does not support collecting the full image data
-  """)
+  return error("""
+         Image file backend $I does not support collecting the full image data
+         """)
 end
 
 """
@@ -269,7 +292,7 @@ Global image format storage.
 Can be extended by registering new subtypes of
 `[ImageFile](@ref)` via `[registerformat!](@ref)`.
 """
-const IMAGE_FORMATS = Dict{String, Type{<: ImageFile}}()
+const IMAGE_FORMATS = Dict{String, Type{<:ImageFile}}()
 
 function registerformat!(::Type{I}) where {I <: ImageFile}
   exts = extensions(I)
@@ -282,10 +305,10 @@ function registerformat!(::Type{I}) where {I <: ImageFile}
   return
 end
 
-function fitsextension(path, I ::Type{<: ImageFile})
+function fitsextension(path, I::Type{<:ImageFile})
   return any(extensions(I)) do ext
     re = Regex(ext * "\$")
-    !isnothing(match(re, path))
+    return !isnothing(match(re, path))
   end
 end
 
@@ -299,13 +322,13 @@ function loadimagefile(path)
   # check all extensions against the file name
   exts = filter(exts) do ext
     re = Regex(ext * "\$")
-    !isnothing(match(re, path))
+    return !isnothing(match(re, path))
   end
   @assert !isempty(exts) """
   Unsupported extension at '$path'. 
   """
   # pick the longest match. E.g., this would pick ".ome.tiff" over ".tiff"
-  exts = sort(exts, by = length)
+  exts = sort(exts; by = length)
   I = IMAGE_FORMATS[exts[end]]
   return I(path)
 end

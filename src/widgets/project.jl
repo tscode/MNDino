@@ -111,9 +111,6 @@ function plotwidget(::ProjectWidget, layout, wctx, theme)
     if isempty(path[])
       fadelabel(save_label, "No file selected", colorant"darkgray")
       return
-    elseif !isfile(path[])
-      fadelabel(save_label, "File $(path[]) not valid", colorant"red")
-      return
     end
     try
       notify(wctx[:update])
@@ -123,7 +120,11 @@ function plotwidget(::ProjectWidget, layout, wctx, theme)
       fadelabel(save_label, "Project saved", colorant"darkgreen")
     catch err
       @error err
-      fadelabel(save_label, "Saving failed", colorant"darkred")
+      if err isa Base.IOError
+        fadelabel(save_label, "Cannot write file", colorant"darkred")
+      else
+        fadelabel(save_label, "Saving failed", colorant"darkred")
+      end
     end
   end
 

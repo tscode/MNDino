@@ -19,13 +19,7 @@ function ChannelViewWidget(
   channels = [],
   filter = NoFilter(),
 )
-  return ChannelViewWidget(
-    title,
-    filter,
-    channels,
-    image_store,
-    variable_store,
-  )
+  return ChannelViewWidget(title, filter, channels, image_store, variable_store)
 end
 
 function _viewdefault(image)
@@ -35,12 +29,7 @@ end
 function initcontext(widget::ChannelViewWidget, ctx)
   wctx = Dict{Union{Symbol, Int}, Any}()
 
-  loadentries!(
-    wctx,
-    widget,
-    [:title, :filter => Filter];
-    obs = true,
-  )
+  loadentries!(wctx, widget, [:title, :filter => Filter]; obs = true)
 
   loadentries!(
     wctx,
@@ -88,11 +77,14 @@ function initcontext(widget::ChannelViewWidget, ctx)
 
     data = lift(wctx[:view]) do view
       img = wctx[:image][]
-      # TODO: The variant will eventually come from the selection widget!
-      variant = (;)
-      return Float32.(
-        imagedata(img, view.zindex, c.cindex, view.tindex; variant...)
-      )
+      variant = (;) # TODO: The variant will eventually come from the selection widget?
+      if c.cindex > nchannels(img)
+        return zeros(Float32, planesize(img; variant...))
+      else
+        return Float32.(
+          imagedata(img, view.zindex, c.cindex, view.tindex; variant...)
+        )
+      end
     end
     data_f = lift((f, data) -> f(data), wctx[:filter], data)
 
@@ -130,6 +122,16 @@ function initcontext(widget::ChannelViewWidget, ctx)
   on(store[:update]) do _
     entry = store[:entry][]
     return shelf[entry.id] = View(wctx[:zindex][], wctx[:tindex][])
+  end
+
+  on(wctx[:image]) do img
+    if nchannels(img) != wctx[:nchannels]
+      @warn """
+      The number of channels changed when an image was selected.
+      The channel view widget currently cannot handle this.
+      For proper functionality, you should remove this image from the project.
+      """
+    end
   end
 
   return wctx
@@ -298,7 +300,7 @@ function _channelview_histograms(layout, yindex, wctx, theme)
   axes = map(1:nchannels) do index
     limits = lift(wctx[index][:extrema]) do minmax
       if minmax[1] == minmax[2] # prevent degenerate axis limits
-        minmax = (minmax[1] - 1f-5, minmax[2] + 1f-5)
+        minmax = (minmax[1] - 1.0f-5, minmax[2] + 1.0f-5)
       end
       return (minmax, (0, nothing))
     end

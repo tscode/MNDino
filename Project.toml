@@ -31,13 +31,5 @@ XML = "72c71f33-b9b6-44de-8c94-c961784809e2"
 [sources]
 Pack = {rev = "main", url = "https://github.com/tscode/Pack.jl.git"}
 
-[compat]
-Dates = "1.11.0"
-OrderedCollections = "1.7.0"
-PrecompileTools = "1.2.1"
-Test = "1.11.0"
-TiffImages = "0.11.1"
-XML = "0.3.4"
-
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"

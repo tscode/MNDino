@@ -40,17 +40,28 @@ function parseattribute(::Type{RGB}, attrib::Vector{String})
   return RGBf(r, g, b)
 end
 
+function planesize(img::ImarisFile; resolution = variantdefault(img).resolution)
+  # We extract the actual size of the data array stored in the HDF5 file, since 
+  # the metadata (ImageSizeX, ImageSizeY) does not seem to be reliable
+  data_group = img.hdf5["DataSet/ResolutionLevel $resolution/TimePoint 0"]
+  data = data_group["Channel 0/Data"]
+  return size(data)[1:2]
+end
+
 function nzlayers(img::ImarisFile)
+  # TODO: We should not trust that this metadata is reliably included in every Imaris file!
   group = img.hdf5["DataSetInfo/CustomData"]
   return parseattribute(Int, group, "NumberOfZPoints")
 end
 
 function ntlayers(img::ImarisFile)
+  # TODO: We should not trust that this metadata is reliably included  in every Imaris file!
   group = img.hdf5["DataSetInfo/CustomData"]
   return parseattribute(Int, group, "NumberOfTimePoints")
 end
 
 function nchannels(img::ImarisFile)
+  # TODO: We should not trust that this metadata is reliably included  in every Imaris file!
   group = img.hdf5["DataSetInfo/CustomData"]
   return parseattribute(Int, group, "NumberOfChannels")
 end
@@ -89,15 +100,12 @@ function metadata(img::ImarisFile; resolution = variantdefault(img).resolution)
     return (; cindex, name, color, opacity, size, extrema)
   end
 
-  return (
-    resolution = cmeta[1].size[1:2],
-    channels = cmeta,
-  )
+  return (resolution = cmeta[1].size[1:2], channels = cmeta)
 end
 
 function channels(img::ImarisFile)
   return map(metadata(img).channels) do c
-    Channel(c.cindex, c.name, c.color)
+    return Channel(c.cindex, c.name, c.color)
   end
 end
 

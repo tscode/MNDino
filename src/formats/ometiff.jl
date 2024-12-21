@@ -101,6 +101,8 @@ nchannels(img::OmeTiffFile) = parse(Int, img.pixels["SizeC"])
 nzlayers(img::OmeTiffFile) = parse(Int, img.pixels["SizeZ"])
 ntlayers(img::OmeTiffFile) = parse(Int, img.pixels["SizeT"])
 
+planesize(img::OmeTiffFile) = (size(img.tiff)[2], size(img.tiff)[1])
+
 variantdefault(::OmeTiffFile) = (;)
 tindexdefault(img::OmeTiffFile) = 1
 
