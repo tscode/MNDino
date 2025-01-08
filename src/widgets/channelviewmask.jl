@@ -54,7 +54,7 @@ function initcontext(widget::ChannelViewMaskWidget, ctx)
   # Load the image store. The masks for each image will be stored
   # in the shelf.
   store = loadcontext(ctx, wctx[:image_store])
-  shelf = addshelf!(store, :mask)
+  shelf = addshelf!(store, :mask, MaskData)
 
   # Derive entries from the parent channel view
   cctx = loadcontext(ctx, wctx[:parent])

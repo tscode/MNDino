@@ -45,7 +45,7 @@ function initcontext(widget::ChannelViewWidget, ctx)
   # image will be stored in the shelf
   store = loadcontext(ctx, wctx[:image_store])
   loadentries!(wctx, store, [:entry, :image])
-  shelf = addshelf!(store, :channelview)
+  shelf = addshelf!(store, :channelview, View)
 
   wctx[:nzlayers] = lift(nzlayers, wctx[:image])
 

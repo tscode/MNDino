@@ -5,21 +5,41 @@ A storable quantity.
 Usually, a `Storable` contains information associated to an image and is stored
 inside of the [`Shelf`](@ref) of an [`ImageStore`](@ref).
 
-Each `Storable` must implement type aware `pack` / `unpack` routines since its
-information is expected to be serialized / deserialized when saving or loading
-projects.
+Each storable must be packable in `Pack.MapFormat`.
 """
 abstract type Storable end
 
-@pack {<: Storable} in Pack.TypedFormat{Pack.MapFormat}
+@pack {<: Storable} in Pack.MapFormat
 
 """
 A shelf contains one `Storable` object per image id.
 
 Providers that want to make use of an `ImageStore` can receive shelves during
 context initialization via [`addshelf!`](@ref).
+
+Shelfs can be used like ordered dictionaries that take `Int` as key.
 """
-const Shelf = OrderedDict{Int, Storable}
+struct Shelf{S <: Storable} <: AbstractDict{Int, S}
+  dict::OrderedDict{Int, S}
+
+  Shelf{S}() where {S} = new{S}(OrderedDict{Int, S}())
+  Shelf{S}(dict::AbstractDict{Int, S}) where {S} = new{S}(dict)
+  Shelf{S}(args...) where {S} = new{S}(OrderedDict{Int, S}(args...))
+end
+
+@pack {<: Shelf} in Pack.TypedFormat{Pack.MapFormat}
+
+Base.keytype(::Type{<: Shelf}) = Int
+Base.valtype(::Type{<: Shelf{S}}) where {S} = S
+Base.keys(s::Shelf) = Base.keys(s.keys)
+Base.values(s::Shelf) = Base.values(s.keys)
+Base.length(s::Shelf) = Base.length(s.dict)
+Base.iterate(s::Shelf, args...) = Base.iterate(s.dict, args...)
+Base.getindex(s::Shelf, args...) = Base.getindex(s.dict, args...)
+Base.setindex!(s::Shelf, args...) = Base.setindex!(s.dict, args...)
+Base.get(s::Shelf, args...) = Base.get(s.dict, args...)
+Base.get(f::Function, s::Shelf, args...) = Base.get(f, s.dict, args...)
+Base.haskey(s::Shelf, args...) = Base.haskey(s.dict, args...)
 
 """
 Image descriptor exposed by the ImageStore.
@@ -221,14 +241,15 @@ function initcontext(store::ImageStore, ctx)
 end
 
 """
-    addshelf!(pctx, key)
+    addshelf!(pctx, key, S)
 
-Add a shelf with name `key` to the store with provider context `pctx`.
+Add a shelf with name `key` and storable type `S <: Storable` to the store with
+provider context `pctx`.
 
 Note that the returned shelf could already be populated with content if the
 project was loaded / saved.
 """
-function addshelf!(pctx, key)
+function addshelf!(pctx, key, S)
   if key in pctx[:shelfkeys]
     @error """
     Shelf key $key already assigned by another !
@@ -237,7 +258,7 @@ function addshelf!(pctx, key)
   end
   push!(pctx[:shelfkeys], key)
   # Shelf could already exist from loading a populated store
-  pctx[:shelfs][key] = get(pctx[:shelfs], key, Shelf())
+  pctx[:shelfs][key] = get(pctx[:shelfs], key, Shelf{S}())
   return pctx[:shelfs][key]
 end
 
