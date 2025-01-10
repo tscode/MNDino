@@ -89,6 +89,7 @@ function welcome()
     return
   elseif length(paths) == 1 && splitext(paths[1])[2] == ".dino"
     project = loadproject(paths[1])
+    merge!(project.theme, merge(default_theme(), project.theme))
     @info "Project file $(paths[1]) has been loaded"
   elseif all(p -> fitsextension(p, ImarisFile), paths)
     project = newproject(; paths)
