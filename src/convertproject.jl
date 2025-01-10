@@ -1,12 +1,42 @@
 
 using OrderedCollections
-using Pack
 using Dates
+
+include("pack/Pack.jl")
+import .Pack
+
+Pack.format(::Type{Dates.DateTime}) = Pack.StringFormat()
+Pack.construct(::Type{Dates.DateTime}, x, ::Pack.StringFormat) = DateTime(x)
 
 Pack.format(::Type{RGBf}) = Pack.MapFormat()
 
-function save_as_v02(project)
-  obj = _emulate_v02(project)
+function convert_project_files()
+  paths = NativeFileDialog.pick_multi_file(filterlist = "dino")
+  convert_project_files(paths)
+end
+
+function convert_project_files(paths)
+  for path in paths
+    @info "Loading v0.1 project file $path..."
+    project = try
+      loadproject(path)
+    catch err
+      @error """
+      Error while trying to load project file: $err.
+      Leaving the file in place.
+      """
+    end
+    @info "Converting project..."
+    obj = _emulate_v02(project)
+    path_old = path * ".old"
+    @info "Moving $path to $path_old"
+    Base.Filesystem.mv(path, path_old)
+    @info "Saving v0.2 project file to $path"
+    GZip.open(path, "w") do file
+      Pack.pack(file, obj)
+    end
+  end
+  return
 end
 
 function _emulate_v02(project01::Project)
@@ -184,7 +214,7 @@ function _emulateshelf_v02(key::Symbol, shelf::Dict)
     error("Unrecognized shelf with key $key")
   end
   value = [key => _emulatestorable_v02(value) for (key, value) in shelf]
-  return (; type, value = Dict(value))
+  return (; type, value = OrderedDict(value))
 end
 
 function _emulatestorable_v02(view01::View2D)
@@ -192,5 +222,5 @@ function _emulatestorable_v02(view01::View2D)
 end
 
 function _emulatestorable_v02(mask01::Dict{Int, BitMatrix})
-  return (; masks = mask01)
+  return (; masks = OrderedDict(mask01))
 end

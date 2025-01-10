@@ -91,9 +91,6 @@ include("widgets/analysis.jl")
 
 include("main.jl")
 
-include("rescueproject.jl")
-
-# precompilation statements
-# include("compilat.jl")
+include("convertproject.jl")
 
 end # module MNDino
