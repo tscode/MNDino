@@ -26,7 +26,7 @@ struct Channel
   color::RGBf
 end
 
-@pack Channel in Pack.MapFormat color in Pack.MapFormat
+@pack Channel in StructFormat [color in StructFormat]
 
 struct ChannelSlice{M <: AbstractMatrix}
   cindex::Int
@@ -79,10 +79,49 @@ Adapt the input tuple `s`, which is assumed to be in XYZCT ordering, to the
 ordering defined by `order`.
 """
 function orderdims(s, order::DimensionOrder)
+  @assert length(s) == 5
   pairs = map(k -> k => getfield(order, k), [:x, :y, :z, :c, :t])
   perm = sortperm(pairs; by = pair -> pair[2])
   filter!(index -> pairs[index][2] != 0, perm)
   return Tuple(s[index] for index in perm)
+end
+
+"""
+    orderpartialdims(s, order::DimensionOrder) 
+
+Adapt the input tuple `s`, which is assumed to be in ZCT ordering, to the
+ordering defined by `order`.
+
+Assumes that XY or YX are the first two dimensions.
+"""
+function orderpartialdims(s, order::DimensionOrder)
+  @assert length(s) == 3
+  pairs = map(k -> k => getfield(order, k), [:z, :c, :t])
+  perm = sortperm(pairs; by = pair -> pair[2])
+  filter!(index -> pairs[index][2] != 0, perm)
+  return Tuple(s[index] for index in perm)
+end
+
+"""
+    revorderdims(s, order::DimensionOrder)
+
+Undo the effect of `orderdims` and return a tuple in XYZCT ordering.
+"""
+function revorderdims(s, order::DimensionOrder)
+  @assert length(s) == 5
+  return (s[order.x], s[order.y], s[order.z], s[order.c], s[order.t])
+end
+
+"""
+    revorderpartialdims(s, order::DimensionOrder)
+
+Undo the effect of `orderpartialdims` and return a tuple in ZCT ordering.
+
+Assumes that XY or YX are the first two dimensions.
+"""
+function revorderpartialdims(s, order::DimensionOrder)
+  @assert length(s) == 3
+  return (s[order.z-2], s[order.c-2], s[order.t-2])
 end
 
 """

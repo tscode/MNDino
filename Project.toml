@@ -21,15 +21,12 @@ Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
 NativeFileDialog = "e1fe445b-aa65-4df4-81c1-2041507f0fd4"
 Observables = "510215fc-4207-5dde-b226-833fc4488ee2"
 OrderedCollections = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
-Pack = "920fdb52-f93c-47e6-97a3-e69691e03beb"
 PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
 Serialization = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 TiffImages = "731e570b-9d59-4bfa-96dc-6df516fadf69"
 XML = "72c71f33-b9b6-44de-8c94-c961784809e2"
-
-[sources]
-Pack = {rev = "main", url = "https://github.com/tscode/Pack.jl.git"}
+StructPack = "9297859c-0cb3-4368-9f60-4c60e5718164"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"

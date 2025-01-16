@@ -8,7 +8,7 @@ using PrecompileTools
 using OrderedCollections
 
 # Saving and loading projects in gzipped msgpack
-using Pack
+using StructPack
 using GZip
 using Serialization # To be removed
 

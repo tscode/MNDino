@@ -15,7 +15,7 @@ struct Project
   providers::OrderedDict{Symbol, Provider}
 end
 
-@pack Project in Pack.MapFormat date in Pack.StringFormat
+@pack Project in StructFormat [date in StringFormat]
 
 function Project(
   name;
@@ -107,11 +107,11 @@ end
 Return or write a binary representation of `project`.
 """
 function packproject(project::Project)
-  return Pack.pack(project)
+  return StructPack.pack(project)
 end
 
 function packproject(io::IO, project::Project)
-  return Pack.pack(io, project)
+  return StructPack.pack(io, project)
 end
 
 """
@@ -121,11 +121,11 @@ end
 Unpack a project from its binary representation.
 """
 function unpackproject(bytes::Vector{UInt8})
-  return Pack.unpack(bytes, Project)
+  return StructPack.unpack(bytes, Project)
 end
 
 function unpackproject(io::IO)
-  return Pack.unpack(io, Project)
+  return StructPack.unpack(io, Project)
 end
 
 """

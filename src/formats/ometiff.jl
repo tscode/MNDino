@@ -1,63 +1,258 @@
 
+"""
+Structure derived from the 'Pixels' node in an OME XML
+"""
+struct OmePixels
+  id::String
+  order::DimensionOrder
+  size::NTuple{5, Int}
+  type::DataType
+end
+
+const _ometiff_pixel_types = Dict(
+  "int8" => Int8,
+  "int16" => Int16,
+  "int32" => Int32,
+  "uint8" => UInt8,
+  "uint16" => UInt16,
+  "uint32" => UInt32,
+  "float" => Float32,
+  "double" => Float64,
+)
+
+"""
+    OmePixels(node)
+
+Create an OmePixels object from a OME-XML `<Pixels>` node `node`.
+"""
+function OmePixels(node)
+  @assert XML.tag(node) == "Pixels" """
+  Expected OME-XML <Pixels> node.
+  """
+  attribs = XML.attributes(node)
+  id = attribs["Id"]
+  type_str = lowercase(attribs["Type"]) 
+  @assert type_str in keys(_ometiff_pixel_types) """
+  Support for pixel type $type_str is currently not implemented.
+  """
+  type = _ometiff_pixel_types(type_str)
+  order_str = attribs["DimensionOrder"]
+  @assert order_str[1:2] == "XY" """
+  Support for DimensionOrder = $order_str is currently not implemented.
+  """
+  # Regarding memory layout: What OmeTiff calls SizeY is apparently the
+  # length of the contiguous (faster) axis in the XY-Slices stored in Tiff.
+  # The length of the non-contiguous (slower) axis is denoted by SizeX.
+  # Since X is usually named first in the DimensionOrder, this indicates
+  # row-major indexing.
+  # However, all remaining dimensions "ZCT" seem to use colum-major ordering. 
+  # Phew...
+  # For that reason, we are bold and call what belongs to SizeY our X-axis
+  # and vice versa.
+  order = DimensionOrder(order_str)
+  size = map(("SizeY", "SizeX", "SizeZ", "SizeC", "SizeT")) do key
+    return parse(Int, attribs[key])
+  end
+  return OmePixels(id, order, size, type)
+end
+
+"""
+Structure that references a specific TiffData plane.
+
+Each `OmeTiffDataPlane` object corresponds to one XY slice of the image and
+contains all necessary information (path and ifd) to access the corresponding
+data.
+"""
+struct OmeTiffDataPlane
+  path::String
+  uuid::String
+  ifd::Int
+  zct::NTuple{3, Int}
+end
+
+"""
+    _ometiff_parse_tiffdata(node, fname, uuid)
+
+Parse the information in a OME-XML `<TiffData>` node `node`.
+
+If `node` does not contain a UUID child, use `path` and `uuid` as fallback.
+"""
+function _ometiff_parse_tiffdata(node, pixels, fname, uuid)
+  @assert XML.tag(node) == "TiffData" """
+  Expected OME-XML <TiffData> node.
+  """
+  attribs = XML.attributes(node)
+  uuids = filter(c -> XML.tag(c) == "UUID", XML.children(node))
+
+  @assert length(uuids) <= 1 """
+  Found $(length(uuids)) <UUID> nodes in <TiffData> node. Expected 0 or 1.
+  """
+
+  if !isempty(uuids)
+    uattribs = XML.attributes(uuids[1])
+    fname = get(uattribs, "FileName", fname)
+    uuid = XML.simple_value(uuids[1])
+  end
+
+  # Extract the idf as well as the Z, C, and T position of all planes
+  # described by this TiffData node
+  planecount = get(attribs, "PlaneCount", 1)
+  first_idf = get(attribs, "IFD", 0)
+  first_zct = (
+    get(attribs, "FirstZ", 0),
+    get(attribs, "FirstC", 0),
+    get(attribs, "FirstT", 0),
+  )
+
+  # The planecount proceeds linearly from first_zct on, but
+  # in the order described by pixels.order
+  first_zct_ordered = orderpartialdims(first_zct, pixels.order)
+  size_ordered = orderpartialdims(pixels.size[3:5], pixels.order)
+
+  lindices = LinearIndices(size_ordered)
+  cindices = CartesianIndices(size_ordered)
+  first_linear = lindices[CartesianIndex(first_zct_ordered)]
+
+  izcts = map(1:planecount) do index
+    ifd = first_idf + (index - 1)
+    zct_sorted = cindices[first_linear + (index - 1)]
+    zct = revorderpartialdims(zct_sorted, pixels.order)
+    (ifd, zct)
+  end
+
+  return map(izcts) do (ifd, zct)
+    OmeTiffDataPlane(fname, uuid, ifd, zct)
+  end
+end
+
+function _ometiff_check_tiffdata(tiffdata)
+  # Get all data paths
+  # Check if planes are complete and harmonize with SizeZ, SizeC, sizeT
+end
+
 #
 # I found this color conversion here:
 #   https://forum.image.sc/t/color-tag-in-ome-tiff-xml/48106
 #
-
 function _ometiff_parse_color(x)
   return RGBAf((x >> 24) & 0xff, (x >> 16) & 0xff, (x >> 8) & 0xff, x & 0xff)
 end
 
+function _ometiff_wavelength_to_rgb(lambda)
+  lambda = clamp(lambda, 400, 675)
+  hue = 270 * (lambda - 675) / 275
+  return RGBf(HSV(hue, 1, 1))
+end
+
+function _ometiff_extract_channelcolor(node, index, nchannels)
+  attribs = XML.attributes(node)
+  if haskey(attribs, "Color")
+    return _ometiff_parse_color(attribs["Color"])
+  elseif haskey(attribs, "EmissionWavelength")
+    return _ometiff_wavelength_to_rgb(attribs["EmissionWavelength"])
+  elseif haskey(attribs, "ExcitationWavelength")
+    return _ometiff_wavelength_to_rgb(attribs["ExcitationWavelength"])
+  else
+    @warn "Could not determine channel color. Picking a random one."
+    hue = index / nchannels * 270
+    return RGBf(HSV(hue, 1, 1))
+  end
+end
+
+function _ometiff_channels(nodes, pixels)
+  @assert length(nodes) == pixels.size[2] """
+  Found more channel XML entries ($(length(nodes))) than expected \
+  ($(pixels.size[2])).
+  """
+  # Make sure that we can read the ids and
+  # that they are stored in the right order
+  ids = map(nodes) do node
+    attribs = XML.attributes(node)
+    @assert XML.tag(node) == "TiffData" """
+    Expected OME-XML <TiffData> node.
+    """
+    m = match(r"Channel:[0-9]+:([0-9]+)", attribs["ID"])
+    @assert !isnothing(m) """
+    Could not determine channel id (ID $(attribs["ID"])).
+    """
+    return m[1]
+  end
+  perm = sortperm(ids)
+  return map(enumerate(nodes[perm])) do (cindex, node)
+    attribs = XML.attributes(node)
+    name = get(attribs, "Name", "")
+    color = _ometiff_extract_channelcolor(node, cindex, length(nodes))
+    return Channel(cindex, name, color)
+  end
+end
+
 # TODO: I have read that there may be multiple IMAGEDESCRIPTION tags?
-function _ometiff_omexml(tiff)
+function _ometiff_extract_xml(tiff)
   ifds = TiffImages.ifds(tiff)
   ifd = ifds isa TiffImages.IFD ? ifds : ifds[1]
   xmlstr = ifd[TiffImages.IMAGEDESCRIPTION].data
   return XML.parse(XML.LazyNode, xmlstr)
 end
 
-function _ometiff_pixels(xml)
+function _ometiff_extract_xmlnodes(xml)
+  ome = nothing
+  pixels = nothing
+  tiffdata = []
+  channels = []
   for node in xml
-    if XML.tag(node) == "Pixels"
+    if XML.tag(node) == "OME"
+      ome = node
+    elseif XML.tag(node) == "Pixels"
       attribs = XML.attributes(node)
       order = attribs["DimensionOrder"]
       @assert order[1:2] in ["XY", "YX"] """
       Dimension order $order is not supported. Must start with X and Y.
       """
-      return attribs
+      pixels = node
+    elseif XML.tag(node) == "TiffData"
+      push!(tiffdata, node)
+    elseif XML.tag(node) == "Channel"
+      push!(channels, node)
     end
   end
-end
-
-function _ometiff_channels(xml)
-  channels = []
-  for node in xml
-    if XML.tag(node) == "Channel"
-      push!(channels, XML.attributes(node))
-    end
-  end
-  nchannels = parse(Int, _ometiff_pixels(xml)["SizeC"])
-  @assert length(channels) == nchannels """
-  Found more channel XML entries than expected.
+  @assert !isnothing(ome) """
+  Missing <OME> tag in OME-XML.
   """
-  # Make sure that we can read the ids and
-  # that they are stored in the right order
-  ids = map(channels) do channel
-    m = match(r"Channel:[0-9]+:([0-9]+)", channel["ID"])
-    @assert !isnothing(m) """
-    Could not determine channel id (ID $(channel["ID"])).
-    """
-    return m[1]
-  end
-  perm = sortperm(ids)
-  return channels[perm]
+  @assert !isnothing(pixels) """
+  Missing <Pixels> tag in OME-XML.
+  """
+  @debug "Found <OME> node"
+  @debug "Found <Pixels> node"
+  @debug "Found $(length(tiffdata)) <TiffData> nodes"
+  @debug "Found $(length(channels)) <Channel> nodes"
+  return (; ome, pixels, tiffdata, channels)
 end
 
+"""
+    _ometiff_parse_xml(xml, fname)  
+
+Parse the OME-XML of an OME-TIFF file with filename fname.
+"""
+function _ometiff_parse_xml(xml, fname)
+  nodes = _ometiff_extract_xmlnodes(xml)
+  uuid = get(XML.attributes(nodes.ome), "UUID", nothing)
+  pixels = OmePixels(nodes.pixels)
+  tiffdata = mapreduce(vcat, nodes.tiffdata) do node
+    _ometiff_parse_tiffdata(node, pixels, fname, uuid)
+  end
+  sort!(tiffdata, by = t -> t.zct)
+
+  channels = _ometiff_channels(nodes.channels, pixels)
+  return (; uuid, pixels, tiffdata, channels)
+end
+
+"""
+Support for the Open Microscopy Environment (OME) Tiff format.
+"""
 struct OmeTiffFile <: ImageFile
   path::String
-  pixels::OrderedDict{String, String}
-  channels::Vector{OrderedDict{String, String}}
-  order::DimensionOrder
+  pixels::OmePixels
+  channels::Vector{Channel}
   tiff::AbstractArray{<:Gray, 5}
 end
 

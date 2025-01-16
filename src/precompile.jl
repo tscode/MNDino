@@ -16,7 +16,7 @@
     notify(ctx[:update])
 
     # Packing and unpacking
-    bytes = Pack.pack(project)
+    bytes = StructPack.pack(project)
     # TODO: This does currently not work since Main.MNDino is needed by Pack
     # but is not defined at this point
     # Pack.unpack(bytes, Project)

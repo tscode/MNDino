@@ -5,11 +5,11 @@ A storable quantity.
 Usually, a `Storable` contains information associated to an image and is stored
 inside of the [`Shelf`](@ref) of an [`ImageStore`](@ref).
 
-Each storable must be packable in `Pack.MapFormat`.
+Each storable must be packable in `StructPack.StructFormat`.
 """
 abstract type Storable end
 
-@pack {<: Storable} in Pack.MapFormat
+@pack {<: Storable} in StructFormat
 
 """
 A shelf contains one `Storable` object per image id.
@@ -27,12 +27,12 @@ struct Shelf{S <: Storable} <: AbstractDict{Int, S}
   Shelf{S}(args...) where {S} = new{S}(OrderedDict{Int, S}(args...))
 end
 
-@pack {<: Shelf} in Pack.TypedFormat{Pack.MapFormat}
+@pack {<: Shelf} in TypedFormat{MapFormat}
 
 Base.keytype(::Type{<: Shelf}) = Int
 Base.valtype(::Type{<: Shelf{S}}) where {S} = S
-Base.keys(s::Shelf) = Base.keys(s.keys)
-Base.values(s::Shelf) = Base.values(s.keys)
+Base.keys(s::Shelf) = Base.keys(s.dict)
+Base.values(s::Shelf) = Base.values(s.dict)
 Base.length(s::Shelf) = Base.length(s.dict)
 Base.iterate(s::Shelf, args...) = Base.iterate(s.dict, args...)
 Base.getindex(s::Shelf, args...) = Base.getindex(s.dict, args...)
