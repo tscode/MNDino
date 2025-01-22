@@ -21,22 +21,26 @@ const _ometiff_pixel_types = Dict(
 )
 
 """
-    OmePixels(node)
+    _ometiff_read_pixels(node)
 
 Create an OmePixels object from a OME-XML `<Pixels>` node `node`.
 """
-function OmePixels(node)
+function _ometiff_read_pixels(node)
+  @debug "Reading the <Pixels> node of OME-XML"
   @assert XML.tag(node) == "Pixels" """
   Expected OME-XML <Pixels> node.
   """
   attribs = XML.attributes(node)
   id = attribs["Id"]
+  @debug "Found pixels id $id" 
   type_str = lowercase(attribs["Type"]) 
+  @debug "Found pixels element type $type_str"
   @assert type_str in keys(_ometiff_pixel_types) """
   Support for pixel type $type_str is currently not implemented.
   """
   type = _ometiff_pixel_types(type_str)
   order_str = attribs["DimensionOrder"]
+  @debug "Found pixels dimension order $order_str"
   @assert order_str[1:2] == "XY" """
   Support for DimensionOrder = $order_str is currently not implemented.
   """
@@ -71,38 +75,48 @@ struct OmeTiffDataPlane
 end
 
 """
-    _ometiff_parse_tiffdata(node, fname, uuid)
+    _ometiff_read_tiffdata(node, fname, uuid)
 
 Parse the information in a OME-XML `<TiffData>` node `node`.
 
 If `node` does not contain a UUID child, use `path` and `uuid` as fallback.
 """
-function _ometiff_parse_tiffdata(node, pixels, fname, uuid)
+function _ometiff_read_tiffdata(node, pixels, fname, uuid)
+  @debug "Reading a <TiffData> node of OME-XML"
   @assert XML.tag(node) == "TiffData" """
   Expected OME-XML <TiffData> node.
   """
   attribs = XML.attributes(node)
   uuids = filter(c -> XML.tag(c) == "UUID", XML.children(node))
-
+  @debug "Found tiff data UUID tags: $uuids"
   @assert length(uuids) <= 1 """
   Found $(length(uuids)) <UUID> nodes in <TiffData> node. Expected 0 or 1.
   """
-
   if !isempty(uuids)
     uattribs = XML.attributes(uuids[1])
-    fname = get(uattribs, "FileName", fname)
     uuid = XML.simple_value(uuids[1])
+    @debug "Found tiff data UUID tag: $uuid"
+    if haskey(uattribs, "FileName")
+      fname = uattribs["FileName"]
+      @debug "Found FileName attribute in UUID node: $fname"
+    else
+      fname = nothing
+      @debug "Found no FileName attribute in UUID node"
+    end
   end
 
-  # Extract the idf as well as the Z, C, and T position of all planes
+  # Extract the ifd as well as the Z, C, and T position of all planes
   # described by this TiffData node
   planecount = get(attribs, "PlaneCount", 1)
-  first_idf = get(attribs, "IFD", 0)
+  @debug "Found plane count $planecount"
+  first_ifd = get(attribs, "IFD", 0)
+  @debug "Found first ifd $first_ifd"
   first_zct = (
     get(attribs, "FirstZ", 0),
     get(attribs, "FirstC", 0),
     get(attribs, "FirstT", 0),
   )
+  @debug "Found first zct index $first_zct"
 
   # The planecount proceeds linearly from first_zct on, but
   # in the order described by pixels.order
@@ -114,7 +128,7 @@ function _ometiff_parse_tiffdata(node, pixels, fname, uuid)
   first_linear = lindices[CartesianIndex(first_zct_ordered)]
 
   izcts = map(1:planecount) do index
-    ifd = first_idf + (index - 1)
+    ifd = first_ifd + (index - 1)
     zct_sorted = cindices[first_linear + (index - 1)]
     zct = revorderpartialdims(zct_sorted, pixels.order)
     (ifd, zct)
@@ -125,9 +139,23 @@ function _ometiff_parse_tiffdata(node, pixels, fname, uuid)
   end
 end
 
-function _ometiff_check_tiffdata(tiffdata)
-  # Get all data paths
-  # Check if planes are complete and harmonize with SizeZ, SizeC, sizeT
+function _ometiff_rearrange_planes(planes, pixels)
+  @debug "Rearranging the planes vector"
+  @assert length(planes) == prod(pixels.size[3:5]) """
+  Number of TIFF data planes ($(length(planes))) does not match \
+  number of planes announced by the <Pixels> node.
+  """
+  # Bring planes into a 3d grid where the cartesian index coincides with
+  # the zct tuple
+  planes = sort(planes, by = t -> t.zct)
+  planes = reshape(planes, pixels.size[3:5])
+  planes_complete = all(CartesianIndices(planes)) do c
+    planes[c].zct == Tuple(c)
+  end
+  @assert planes_complete """
+  Not all planes announced by the <Pixels> node could be identified.
+  """
+  return planes
 end
 
 #
@@ -144,7 +172,7 @@ function _ometiff_wavelength_to_rgb(lambda)
   return RGBf(HSV(hue, 1, 1))
 end
 
-function _ometiff_extract_channelcolor(node, index, nchannels)
+function _ometiff_read_channelcolor(node, index, nchannels)
   attribs = XML.attributes(node)
   if haskey(attribs, "Color")
     return _ometiff_parse_color(attribs["Color"])
@@ -159,7 +187,7 @@ function _ometiff_extract_channelcolor(node, index, nchannels)
   end
 end
 
-function _ometiff_channels(nodes, pixels)
+function _ometiff_read_channels(nodes, pixels)
   @assert length(nodes) == pixels.size[2] """
   Found more channel XML entries ($(length(nodes))) than expected \
   ($(pixels.size[2])).
@@ -181,20 +209,28 @@ function _ometiff_channels(nodes, pixels)
   return map(enumerate(nodes[perm])) do (cindex, node)
     attribs = XML.attributes(node)
     name = get(attribs, "Name", "")
-    color = _ometiff_extract_channelcolor(node, cindex, length(nodes))
+    color = _ometiff_read_channelcolor(node, cindex, length(nodes))
     return Channel(cindex, name, color)
   end
 end
 
 # TODO: I have read that there may be multiple IMAGEDESCRIPTION tags?
 function _ometiff_extract_xml(tiff)
+  @debug "Extracting OME-XML from IMAGEDESCRIPTION tag of the provided tiff"
   ifds = TiffImages.ifds(tiff)
   ifd = ifds isa TiffImages.IFD ? ifds : ifds[1]
   xmlstr = ifd[TiffImages.IMAGEDESCRIPTION].data
   return XML.parse(XML.LazyNode, xmlstr)
 end
 
+"""
+    _ometiff_extract_xmlnodes(xml)
+
+Return a named tuple containing the relevant xml nodes in the passed
+OME XML `xml`.
+"""
 function _ometiff_extract_xmlnodes(xml)
+  @debug "Filtering relevant nodes from OME-XML"
   ome = nothing
   pixels = nothing
   tiffdata = []
@@ -218,10 +254,10 @@ function _ometiff_extract_xmlnodes(xml)
   @assert !isnothing(ome) """
   Missing <OME> tag in OME-XML.
   """
+  @debug "Found <OME> node"
   @assert !isnothing(pixels) """
   Missing <Pixels> tag in OME-XML.
   """
-  @debug "Found <OME> node"
   @debug "Found <Pixels> node"
   @debug "Found $(length(tiffdata)) <TiffData> nodes"
   @debug "Found $(length(channels)) <Channel> nodes"
@@ -229,21 +265,76 @@ function _ometiff_extract_xmlnodes(xml)
 end
 
 """
-    _ometiff_parse_xml(xml, fname)  
+    _ometiff_extract_paths(planes)
 
-Parse the OME-XML of an OME-TIFF file with filename fname.
+Extract all tiff file paths that are referenced in the `<TiffData>` nodes
+read by `planes`.
 """
-function _ometiff_parse_xml(xml, fname)
+function _ometiff_extract_paths(planes, dir)
+  @debug "Extracting tiff file paths"
+  uuid_paths = map(planes) do td
+    @assert !isnothing(td.fname) """
+    Lookup of tiff file by UUID alone is currently not supported
+    """
+    path = joinpath(dir, td.fname)
+    @assert Base.isfile(path) """
+    Expected file at $path.
+    """
+    uuid => path
+  end
+  uuid_paths = unique(uuid_paths)
+  @debug "Found $(length(uuid_paths)) UUID-path pairs"
+  for (u1, p1) in uuid_paths, (u2, p2) in uuid_paths
+    if u1 == u2
+      @assert p1 == p2 """
+      Inconsistency when extracting tiff paths: UUID $u1 is assigned to files \
+      $p1 and $p2.
+      """
+    elseif p1 == p2
+      @assert u1 == u2 """
+      Inconsistency when extracting tiff paths: Path $p1 is assigned UUID \
+      $u1 and $u2.
+      """
+    end
+  end
+  return Dict(uuid_paths)
+end
+
+"""
+    _ometiff_parse_xml(xml, fname) 
+
+Read the OME-XML of an OME-TIFF file with filename `fname`.
+"""
+function _ometiff_parse_xml(xml, fname, dir)
   nodes = _ometiff_extract_xmlnodes(xml)
   uuid = get(XML.attributes(nodes.ome), "UUID", nothing)
-  pixels = OmePixels(nodes.pixels)
-  tiffdata = mapreduce(vcat, nodes.tiffdata) do node
-    _ometiff_parse_tiffdata(node, pixels, fname, uuid)
+  @debug "OME-XML has UUID $uuid"
+  pixels = _ometiff_read_pixels(nodes.pixels)
+  planes = mapreduce(vcat, nodes.tiffdata) do node
+    _ometiff_read_planes(node, pixels, fname, uuid)
   end
-  sort!(tiffdata, by = t -> t.zct)
+  planes = _ometiff_rearrange_planes(planes, pixels)
+  @debug "Parsing channels"
+  channels = _ometiff_read_channels(nodes.channels, pixels)
+  paths = _ometiff_extract_paths(planes, dir)
+  return (; uuid, pixels, planes, paths, channels)
+end
 
-  channels = _ometiff_channels(nodes.channels, pixels)
-  return (; uuid, pixels, tiffdata, channels)
+function _ometiff_load_xml(path)
+  @debug "Trying to extract OME-XML from $path"
+  if lowercase(splitext(path)[2]) == ".ome"
+    xml = open(path) do io
+      read(io, XML.Node)
+    end
+    fname = nothing
+  else
+    tiff = TiffImages.load(path; mmap = true, verbose = false)
+    xml = _ometiff_extract_omexml(tiff)
+    close(tiff)
+    fname = Base.basename(path)
+  end
+  @debug "Sucessfully extracted OME-XML from $path"
+  return _ometiff_parse_xml(xml, fname, Base.dirname(path))
 end
 
 """
@@ -253,50 +344,43 @@ struct OmeTiffFile <: ImageFile
   path::String
   pixels::OmePixels
   channels::Vector{Channel}
-  tiff::AbstractArray{<:Gray, 5}
+  planes::Array{3, OmeTiffDataPlane}
+  tiffs::Dict{String, AbstractArray{<:Gray, 5}}
 end
 
 function OmeTiffFile(path::String)
-  tiff = TiffImages.load(path; mmap = true, verbose = false)
-  xml = _ometiff_omexml(tiff)
-  pixels = _ometiff_pixels(xml)
-  channels = _ometiff_channels(xml)
-
-  # After previous attempts interchanged the X and Y axes, I found this:
-  #  https://github.com/tlnagy/OMETIFF.jl/blob/a58e9369da47d02295120dbe3f1af852adf75be4/src/parsing.jl#L170C1-L170C85
-  # Apparently, YX... gives the right specification for 2D slices for colum-major languages. That is, SizeY describes the length of the axis tightest in memory while SizeX corresponds to the second tightest.
-  ostr = "YX" * pixels["DimensionOrder"][3:end]
-  order = DimensionOrder(ostr)
-  sz = map(("SizeX", "SizeY", "SizeZ", "SizeC", "SizeT")) do key
-    return parse(Int, pixels[key])
+  meta = _ometiff_load_xml(path)
+  sz = meta.pixels.size[1:2]
+  tiffs = map(pairs(meta.paths)) do (uuid, fname)
+    p = joinpath(dirname(path), fname)
+    @debug "Loading TIFF file $p with expected UUID $uuid."
+    m = _ometiff_load_xml(p)
+    @assert m.uuid == uuid """
+    Expected UUID $uuid but found $(m.uuid) in file $p.
+    """
+    tiff = TiffImages.load(path; mmap = true, verbose = false)
+    @assert size(tiff)[1:2] == sz """
+      Expected XY dimensions $sz but file $p has dimensions $(size(tiff)[1:2]).
+    """
+    @debug "Loading TIFF file $p was successfull."
+    uuid => tiff
   end
-  sz = orderdims(sz, order)
-  # We always expect that TiffImages has gotten the first two dimensions right
-  @assert sz[1:2] == size(tiff)[1:2] """
-  Inconsistency of XY dimensions between metadata and loaded tiff image.
-  """
-  @assert prod(sz) == prod(size(tiff)) """
-  Inconsistency between shape metadata and loaded tiff image.
-  """
-  tiff = reshape(tiff, sz)
-  dims = (order.x, order.y, order.z, order.c, order.t)
-  tiff = PermutedDimsArray(tiff, dims)
+  tiffs = Dict(tiffs)
 
-  return OmeTiffFile(path, pixels, channels, order, tiff)
+  return OmeTiffFile(path, meta.pixels, meta.channels, meta.order, tiffs)
 end
 
-extensions(::Type{OmeTiffFile}) = [".ome.tif", ".ome.tiff"]
+extensions(::Type{OmeTiffFile}) = [".ome", ".ome.tif", ".ome.tiff"]
 location(img::OmeTiffFile) = img.path
 
 # From what I know, OMETIFF files do not store multiple versions / variants
 # Update: There seems to be an option for "pyramidal" OMETIFF images in newer versions. For now, we do not support this.
 variants(::OmeTiffFile) = (;)
 
-nchannels(img::OmeTiffFile) = parse(Int, img.pixels["SizeC"])
-nzlayers(img::OmeTiffFile) = parse(Int, img.pixels["SizeZ"])
-ntlayers(img::OmeTiffFile) = parse(Int, img.pixels["SizeT"])
-
-planesize(img::OmeTiffFile) = (size(img.tiff)[2], size(img.tiff)[1])
+nzlayers(img::OmeTiffFile) = img.pixels.size[3]
+nchannels(img::OmeTiffFile) = img.pixels.size[4]
+ntlayers(img::OmeTiffFile) = img.pixels.size[5]
+planesize(img::OmeTiffFile) = img.pixels.size[1:2]
 
 variantdefault(::OmeTiffFile) = (;)
 tindexdefault(img::OmeTiffFile) = 1
@@ -306,27 +390,7 @@ function zindexdefault(img::OmeTiffFile)
   return max(div(nz, 2), 1)
 end
 
-function channels(img::OmeTiffFile)
-  return map(enumerate(img.channels)) do (cindex, ch)
-    if haskey(ch, "Name")
-      name = ch["Name"]
-    else
-      @warn """
-      Could not determine channel name. Falling back to 'Channel $cindex'
-      """
-      name = "Channel $cindex"
-    end
-    if haskey(ch, "Color")
-      color = _ometiff_parse_color(parse(Int, ch["Color"]))
-    else
-      @warn """
-      Could not determine channel color. Picking a random one.
-      """
-      color = _getcolor(cindex)
-    end
-    Channel(cindex, name, color)
-  end
-end
+channels(img::OmeTiffFile) = img.channels
 
 function metadata(img::OmeTiffFile)
   return (
@@ -336,10 +400,15 @@ function metadata(img::OmeTiffFile)
 end
 
 function imagedata(img::OmeTiffFile, zindex, cindex, tindex)
-  slice = @view img.tiff[:, :, zindex, cindex, tindex]
-  slice = ImageCore.channelview(slice) # remove color wrapper (Gray)
-  slice = reinterpret.(slice) # remove Normed FixedPointNumber
-  return reinterpret(UInt8, slice)
+  plane = img.planes[zindex, cindex, tindex]
+  tiff = img.tiffs[plane.uuid]
+  slice = @view tiff[:, :, plane.ifd]]
+  return slice
+
+  # slice = @view img.tiff[:, :, zindex, cindex, tindex]
+  # slice = ImageCore.channelview(slice) # remove color wrapper (Gray)
+  # slice = reinterpret.(slice) # remove Normed FixedPointNumber
+  # return reinterpret(UInt8, slice)
 end
 
 registerformat!(OmeTiffFile)
