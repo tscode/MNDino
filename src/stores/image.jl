@@ -29,6 +29,8 @@ end
 
 @pack {<: Shelf} in TypedFormat{MapFormat}
 
+StructPack.typeparamtypes(::Type{<: Shelf}) = (Type,)
+
 Base.keytype(::Type{<: Shelf}) = Int
 Base.valtype(::Type{<: Shelf{S}}) where {S} = S
 Base.keys(s::Shelf) = Base.keys(s.dict)
