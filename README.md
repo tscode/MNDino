@@ -51,11 +51,10 @@ The following is a simple example:
 inputs = (:C1, :C2, :S1)
 
 # We declare the following outputs from our script.
-# We add some documentation to clarify what the outputs refer to.
 outputs = (
-  :meanC1 => "The mean value of channel C1",
-  :meanC1S1 => "The mean value of channel C1 restricted to S1",
-  :meanC2S1 => "The mean of C2 weighted by C1 restricted to S1",
+  :meanC1,
+  :meanC1S1,
+  :meanC2S1,
 )
 
 # Here, we implement the actual computations that generate our outputs
@@ -73,8 +72,11 @@ end
 ```
 
 ## Limitations
-Currently, only images in the [Imaris file format](https://imaris.oxinst.com/support/imaris-file-format) are supported. Such images, with the file extension `.ims`, are typically produced by a (fluorescent) microscope. Feel free to submit an issue if you would like to see support for other formats!
+Currently, images in the [Imaris file format](https://imaris.oxinst.com/support/imaris-file-format) and the [OME-TIFF format](https://docs.openmicroscopy.org/ome-model/5.6.3/ome-tiff/) are supported.
+Such images are typically produced by (fluorescent) microscopes.
+Feel free to submit an issue if you have issues with these file types or would like to see support for other formats.
 
 ## Acknowledgements
-MNDino is powered by the awesome plotting library [GLMakie](https://docs.makie.org/stable/). The development also profits greatly from the image analysis tools in [Images](https://github.com/JuliaImages/Images.jl).
+MNDino is powered by the plotting library [GLMakie](https://docs.makie.org/stable/).
+The development also profits greatly from the image analysis tools in [Images](https://github.com/JuliaImages/Images.jl).
 
