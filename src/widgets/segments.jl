@@ -20,6 +20,7 @@ function initcontext(widget::SegmentsWidget, ctx)
     (0, 0),
     ignore_equal_values = true,
   )
+  wctx[:downscaling] = mpctx[:downscaling]
 
   for index in 1:wctx[:nmasks]
     wctx[:masks][index] = Dict{Symbol, Any}()
@@ -67,9 +68,24 @@ function _segments_showsegments(layout, wctx, theme)
   Makie.deregister_interaction!(ax, :dragpan)
 
   for index in 1:wctx[:nmasks]
+    mask = wctx[:masks][index][:mask]
+
+    mask_sz = lift(Base.size, mask, ignore_equal_values = true)
+    mask_scaled = lift(mask_sz, wctx[:downscaling]) do sz, scaling
+      sz_scaled = div.(sz, scaling, RoundUp)
+      ImageTransformations.imresize(mask[], sz_scaled)
+    end
+
+    on(mask) do data
+      ImageTransformations.imresize!(mask_scaled[], data)
+      notify(mask_scaled)
+    end
+
     Makie.image!(
       ax,
-      wctx[:masks][index][:mask];
+      lift(sz -> (0, sz[1]), mask_sz),
+      lift(sz -> (0, sz[2]), mask_sz),
+      mask_scaled;
       colorrange = (0.0, 1.0),
       colormap = lift(
         c -> [(:black, 0.01), (0.8c, 0.5)],

@@ -3,10 +3,10 @@
 Storage for one mask per mask channel.
 """
 struct MaskData <: Storable
-  masks::OrderedDict{Int, BitMatrix}
+  masks::OrderedDict{Int, Matrix{Bool}}
 end
 
-MaskData() = MaskData(OrderedDict{Int, BitMatrix}())
+MaskData() = MaskData(OrderedDict{Int, Matrix{Bool}}())
 
 """
 Widget that extends a [`ChannelViewWidget`] by adding mask drawing and
@@ -77,7 +77,7 @@ function initcontext(widget::ChannelViewMaskWidget, ctx)
     wctx[index][:name] = cctx[index][:name]
 
     # TODO: implement and handle resize events, e.g., when we want to change resolution globally
-    mask = BitMatrix(undef, cctx[index][:size][])
+    mask = Matrix{Bool}(undef, cctx[index][:size][])
     mask .= false
     wctx[index][:mask] = Observable(mask)
 
@@ -105,7 +105,7 @@ function initcontext(widget::ChannelViewMaskWidget, ctx)
         wctx[index][:mask][] = shelf[next.id].masks[index]
       else
         sz = wctx[index][:size][]
-        mask = BitMatrix(undef, sz)
+        mask = Matrix{Bool}(undef, sz)
         mask .= false
         wctx[index][:mask][] = mask
       end
@@ -121,6 +121,10 @@ function initcontext(widget::ChannelViewMaskWidget, ctx)
   wctx[:pen_on] = Observable(false)
   wctx[:segment_on] = Observable(false)
   wctx[:pen_size] = Observable(100)
+
+  # Internal resolution reduction for certain mask operations
+  # and visualizations for a more fluid experience
+  wctx[:downscaling] = Observable(2)
 
   return wctx
 end
@@ -151,9 +155,24 @@ function _mask_interaction!(wctx)
     color = lift(complement, wctx[index][:color])
     colormap = lift(c -> [:transparent, (c, 0.3)], color)
 
+    mask_sz = lift(Base.size, mask, ignore_equal_values = true)
+    mask_scaled = lift(mask_sz, wctx[:downscaling]) do sz, scaling
+      sz_scaled = div.(sz, scaling, RoundUp)
+      ImageTransformations.imresize(mask[], sz_scaled)
+    end
+
+    onany(mask, wctx[:mask_on]) do data, visible
+      if visible
+        ImageTransformations.imresize!(mask_scaled[], data)
+        notify(mask_scaled)
+      end
+    end
+
     Makie.image!(
       ax,
-      mask;
+      lift(sz -> (0, sz[1]), mask_sz),
+      lift(sz -> (0, sz[2]), mask_sz),
+      mask_scaled;
       colormap = colormap,
       colorrange = (0, 1),
       visible = wctx[:mask_on],
@@ -163,8 +182,17 @@ function _mask_interaction!(wctx)
 end
 
 struct PenInteraction
-  mask::Observable{BitMatrix}
+  mask::Observable{Matrix{Bool}}
   wctx::Dict
+  update_mask::Observable{Nothing}
+end
+
+function PenInteraction(mask, wctx)
+  update_mask = Observable{Nothing}(nothing)
+  on(Observables.throttle(0.05, update_mask)) do _
+    notify(mask)
+  end
+  PenInteraction(mask, wctx, update_mask)
 end
 
 function Makie.process_interaction(pen::PenInteraction, event::MouseEvent, ax)
@@ -178,32 +206,20 @@ function Makie.process_interaction(pen::PenInteraction, event::MouseEvent, ax)
   left = [MouseEventTypes.leftdown, MouseEventTypes.leftdrag]
   right = [MouseEventTypes.rightdown, MouseEventTypes.rightdrag]
 
-  mask_task = Threads.@spawn begin
-    if event.type in left
-      tmp = copy(mask)
-      for i in irange, j in jrange
-        under_pen = (c[1] - i)^2 + (c[2] - j)^2 < r^2
-        tmp[i, j] = tmp[i, j] || under_pen
-      end
-    elseif event.type in right
-      tmp = copy(mask)
-      for i in irange, j in jrange
-        under_pen = (c[1] - i)^2 + (c[2] - j)^2 < r^2
-        tmp[i, j] = tmp[i, j] && !under_pen
-      end
-    else
-      tmp = nothing
+  if event.type in left
+    for i in irange, j in jrange
+      under_pen = (c[1] - i)^2 + (c[2] - j)^2 < r^2
+      mask[i, j] = mask[i, j] || under_pen
     end
-    tmp
+    notify(pen.update_mask)
+  elseif event.type in right
+    for i in irange, j in jrange
+      under_pen = (c[1] - i)^2 + (c[2] - j)^2 < r^2
+      mask[i, j] = mask[i, j] && !under_pen
+    end
+    notify(pen.update_mask)
   end
 
-  @async begin
-    tmp = fetch(mask_task)
-    if !isnothing(tmp)
-      mask .= tmp
-      notify(pen.mask)
-    end
-  end
   return
 end
 
@@ -255,7 +271,7 @@ function _pen_interaction!(wctx)
 end
 
 struct SegmentInteraction
-  mask::Observable{BitMatrix}
+  mask::Observable{Matrix{Bool}}
   wctx::Dict
   seeds::Observable{Vector{Point2f}}
 end
@@ -283,6 +299,11 @@ function Makie.process_interaction(
   if event.type in [MouseEventTypes.leftdown]
     seg.seeds[] = [event.data]
   elseif event.type in [MouseEventTypes.leftup]
+    if isempty(seg.seeds[])
+      # This sometimes happens when you click / double click
+      # on a single points
+      return
+    end
     seg.seeds[] = [seg.seeds[][1], event.data]
     seeds = map(seg.seeds[]) do seed
       return Tuple(round.(Int, seed))
@@ -291,18 +312,29 @@ function Makie.process_interaction(
     index = seg.wctx[:focused][]
     data = seg.wctx[index][:data][]
     cmin, cmax = seg.wctx[index][:crange][]
-    cdata = clamp.(data, cmin, cmax)
 
     segment_task = Threads.@spawn begin
-      ImageSegmentation.seeded_region_growing(
-        cdata,
-        [CartesianIndex(seeds[i]) => i for i in 1:2],
+      scaling = seg.wctx[:downscaling][]
+      sz_scaled = div.(size(data), scaling, RoundUp)
+      data_scaled = ImageTransformations.imresize(data, sz_scaled)
+      seeds_scaled = map(1:2, seeds, sz_scaled) do i, seed, sz
+        coords = clamp.(div.(seed, scaling, RoundUp), 1, sz)
+        CartesianIndex(coords) => i
+      end
+      segments = ImageSegmentation.seeded_region_growing(
+        clamp.(data_scaled, cmin, cmax),
+        seeds_scaled,
       )
+      mask_scaled = ImageSegmentation.labels_map(segments) .== 1
+      if scaling > 1
+        ImageTransformations.imresize(mask_scaled, size(data)) .>= 0.5
+      else
+        mask_scaled
+      end
     end
-    @async begin
-      segments = fetch(segment_task)
-      lmap = ImageSegmentation.labels_map(segments)
-      seg.mask[] .|= lmap .== 1
+
+    begin
+      seg.mask[] .|= fetch(segment_task)
       seg.seeds[] = Point2f[]
       notify(seg.mask)
     end

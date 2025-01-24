@@ -35,7 +35,8 @@ end
     mat,
     [CartesianIndex(1, 1) => 1, CartesianIndex(5, 5) => 2],
   )
-  mask = BitMatrix(undef, 10, 10)
+  mask = Matrix{Bool}(undef, 10, 10)
   ImageMorphology.erode!(mask; r = 1)
   ImageMorphology.dilate!(mask; r = 1)
+  ImageTransformations.imresize(mask, (20, 20))
 end

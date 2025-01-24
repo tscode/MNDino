@@ -14,7 +14,7 @@ Pkg.add(url="https://gitlab.gwdg.de/staudt1/mndino.git")
 A julia version of 1.9 or higher is strongly recommended. You can get julia from [here](https://julialang.org/downloads/).
 
 ## Usage
-At the moment (version v0.1), only one GUI layout is included in MNDino. This layout can be accessed via `MNDino.main()`. A window will ask for image files (e.g., *.ims*) or an MNDino project file (*.dino*). Ideally, you start a julia environment with at least two threads (i.e., run `julia -t2`).
+At the moment (version 0.2), only one GUI layout is included in MNDino. This layout can be accessed via `MNDino.main()`. A window will ask for image files (e.g., *.ims*) or an MNDino project file (*.dino*). Ideally, you start a julia environment with at least two threads (i.e., run `julia -t2`).
 
 After picking some files, you will be greeted by a user interface with several widgets. The following hints might help navigate the interaction options. They apply to version v0.1 and are likely subject to future change.
 

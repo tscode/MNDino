@@ -410,6 +410,7 @@ function _channelview_mouseposition!(wctx)
 end
 
 function _channelview_values(layout, yindex, wctx, theme)
+
   for index in 1:wctx[:nchannels]
     Label(
       layout[yindex, index],
@@ -427,7 +428,11 @@ function _channelview_values(layout, yindex, wctx, theme)
       fontsize = theme[:ticksize],
       tellwidth = false,
     )
-    value = lift(wctx[index][:mouse_value]) do val
+    # TODO: The update of value in the label causes a LOT of GC.
+    # Throttling helps, but this should probably be handled more efficiently
+    # in Makie?
+    mouse_value = Observables.throttle(0.25, wctx[index][:mouse_value]) 
+    value = lift(mouse_value) do val
       return isnan(val) ? "" : string(round(val))
     end
     Label(
