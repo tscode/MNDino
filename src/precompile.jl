@@ -7,8 +7,8 @@
   FileIO.save(path, data)
 
   @compile_workload begin
-    project = newproject(paths = [path, path])
-    ctx = runproject(project, display = false)
+    project = newproject(paths = [path, path], dryrun = true)
+    ctx = runproject(project, dryrun = true)
 
     # Change image
     notify(ctx[:providers][:images][:select_next])

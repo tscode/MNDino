@@ -1,5 +1,6 @@
 
 using GLMakie
+using GLMakie.GLFW
 
 function default_theme()
   return Dict(
@@ -22,7 +23,7 @@ function default_paths()
   return ["data/Cell_with_dye.jpg"]
 end
 
-function runproject(project::Project; wait = false, size = (1200, 1000), display = true)
+function runproject(project::Project; wait = false, size = (1200, 1000), dryrun = false)
   fig = Figure(; size, backgroundcolor = :lightgray)
 
   layout_project = GridLayout(fig[1, 1]; alignmode = Outside(15), valign = :top)
@@ -61,7 +62,7 @@ function runproject(project::Project; wait = false, size = (1200, 1000), display
 
   ctx = initproject(project, layouts; options = (:mask => (framepadding = 5,)))
 
-  if display
+  if !dryrun
     version = pkgversion(MNDino)
     GLMakie.activate!(; title = "MNDino v$version")
     screen = Base.display(fig)
@@ -82,7 +83,7 @@ function filterlist()
   return "*;dino;$images"
 end
 
-function welcome()
+function welcome(; dryrun = false)
   paths = NativeFileDialog.pick_multi_file(; filterlist = filterlist())
   if isempty(paths)
     @info "No files have been selected"
@@ -92,14 +93,14 @@ function welcome()
     merge!(project.theme, merge(default_theme(), project.theme))
     @info "Project file $(paths[1]) has been loaded"
   elseif all(p -> fitsextension(p, ImarisFile), paths)
-    project = newproject(; paths)
-    @info "New project with $(length(paths)) Imaris files has been created"
+    project = newproject(; paths, dryrun)
+    @info "New project with $(length(paths)) Imaris files is being created"
   elseif all(p -> fitsextension(p, CommonImageFile), paths)
-    @info "New project with $(length(paths)) image files has been created"
-    project = newproject(; paths)
+    @info "New project with $(length(paths)) image files is being created"
+    project = newproject(; paths, dryrun)
   elseif all(p -> fitsextension(p, OmeTiffFile), paths)
-    @info "New project with $(length(paths)) OMETIFF files has been created"
-    project = newproject(; paths)
+    @info "New project with $(length(paths)) OMETIFF files is being created"
+    project = newproject(; paths, dryrun)
   else
     @warn "Some of the provided files are not valid image files. Exiting"
     project = nothing
@@ -112,7 +113,25 @@ function newproject(;
   name = "New Project",
   theme = default_theme(),
   paths = default_paths(),
+  dryrun = false,
 )
+
+  if !dryrun
+    path_example = first(paths)
+    @info """
+    Starting channel configurator based on image
+      $path_example
+    """
+    channels = channelconfigurator(loadimagefile(path_example))
+  else
+    channels = []
+  end
+
+  if isnothing(channels)
+    @info "Channel configuration aborted."
+    return nothing
+  end
+  
   project = Project(name; theme = theme)
 
   addprovider!(project, :images) do
@@ -136,6 +155,7 @@ function newproject(;
       "Channels";
       image_store = :images,
       variable_store = :variables,
+      channels = channels,
     )
   end
 
@@ -166,15 +186,210 @@ function main(;
   show_welcome = true,
   wait = true,
   size = (1200, 1000),
+  dryrun = false,
   kwargs...,
 )
   if show_welcome
-    project = welcome()
+    project = welcome(; dryrun)
   else
-    project = newproject(; kwargs...)
+    project = newproject(; dryrun, kwargs...)
   end
   if !isnothing(project)
+    @info "Running project..."
     runproject(project; wait, size)
+  else
+    @info "Discarding project"
   end
   return
 end
+
+function colorpicker(pos, color, default)
+  ax = Axis(
+    pos,
+    limits = ((0, 270), (0, 1)),
+    height = 15,
+    spinewidth = 0.75,
+  )
+  Makie.hidedecorations!(ax)
+  # Makie.hidespines!(ax)
+  Makie.deregister_interaction!(ax, :rectanglezoom)
+  Makie.deregister_interaction!(ax, :dragpan)
+  Makie.deregister_interaction!(ax, :scrollzoom)
+  Makie.deregister_interaction!(ax, :limitreset)
+
+  colors = map(0:270) do hue
+    RGB{Float32}(HSV(hue, 0.75, 1))
+  end
+  colors = reshape(colors, :, 1)
+  image!(ax, colors)
+
+  hovered_hue = Observable(NaN)
+  selected_hue = map(c -> [HSV(c).h], color)
+  vlines!(ax, selected_hue, color = :black, linewidth = 3)
+  vlines!(ax, selected_hue, color = :white, linewidth = 0.75)
+  vlines!(ax, hovered_hue, color = :black, linewidth = 1)
+
+  register_interaction!(ax, :color) do event::MouseEvent, ax
+    if event.type == MouseEventTypes.over
+      hovered_hue[] = event.data[1]
+    elseif event.type == MouseEventTypes.out
+      hovered_hue[] = NaN
+    elseif event.type == MouseEventTypes.leftclick
+      color[] = HSV(event.data[1], 1, 1)
+    elseif event.type == MouseEventTypes.leftdoubleclick
+      color[] = default
+    end
+  end
+end
+
+function channelconfigurator(img::ImageFile)
+  fig = Figure(size = (800, 500))
+  layout = GridLayout(fig[1,1], default_rowgap = 7, default_colgap = 25)
+  init_channels = channels(img)
+  thumbnails = map(init_channels) do c
+    zindex = zindexdefault(img)
+    tindex = tindexdefault(img)
+    data = imagedata(img, zindex, c.cindex, tindex)
+    data = ImageTransformations.imresize(data, 256, 256)
+    a, b = quantile(data, [0.001, 0.999])
+    clamp.(data, a, b)
+  end
+  names = map(c -> c.name, init_channels)
+  colors = map(c -> c.color, init_channels)
+  order = collect(1:length(init_channels))
+  update = Observable(nothing)
+
+  for xindex in 1:length(init_channels)
+    thumbnail = Observable(thumbnails[xindex])
+    name = Observable(names[xindex])
+    color = Observable(colors[xindex])
+    cindex = Observable(xindex)
+
+    Label(
+      layout[2, xindex],
+      "C$xindex",
+      fontsize = 14,
+      font = :bold,
+      tellwidth = false,
+      halign = :center,
+    )
+    Label(
+      layout[2, xindex],
+      lift(c -> "(c-index: $c)", cindex),
+      fontsize = 12,
+      tellwidth = false,
+      halign = :right,
+    )
+
+    # Name of the channel
+    Box(
+      layout[3, xindex],
+      strokevisible = false,
+      color = lift(c -> 0.4c, color),
+    )
+    make_namebox = str -> Textbox(layout[3, xindex],
+      stored_string = str,
+      font = :bold,
+      fontsize = 14,
+      halign = :center,
+      bordercolor = :transparent,
+      bordercolor_hover = :transparent,
+      bordercolor_focused = :transparent,
+      boxcolor_hover = (:white, 0.1),
+      boxcolor_focused = (:white, 0.25),
+      cursorcolor = :transparent,
+      textcolor = RGB(0.98, 0.98, 0.98),
+      textpadding = (3, 3, 5, 5),
+      cornerradius = 0,
+      tellwidth = false,
+    )
+    namebox = make_namebox(name)
+    
+    # Plot the thumbnail
+    ax = Axis(layout[4, xindex], aspect = DataAspect())
+    hidedecorations!(ax)
+    hidespines!(ax)
+    image!(ax, thumbnail, colormap = lift(c -> [:black, c], color))
+
+    # Plot the color chooser
+    picked_color = lift(identity, color)
+    colorpicker(layout[5, xindex], picked_color, color[])
+
+    # Left / right buttons
+    button_layout = GridLayout(layout[6, xindex], 1, 4, default_colgap = 5)
+    button_left = Button(button_layout[1, 2], label = "◀", width = 40)
+    button_right = Button(button_layout[1, 3], label = "▶", width = 40)
+
+    # Map interactions to changes in names, colors, and order
+    on(update) do _
+      cindex[] = order[xindex]
+      thumbnail[] = thumbnails[cindex[]]
+      name[] = names[cindex[]]
+      color[] = colors[cindex[]]
+    end
+
+    on(button_left.clicks) do _
+      if !(xindex == 1)
+        order[xindex-1:xindex] = order[[xindex, xindex-1]]
+        notify(update)
+      end
+    end
+
+    on(button_right.clicks) do _
+      if !(xindex == length(order))
+        order[xindex:xindex+1] = order[[xindex+1, xindex]]
+        notify(update)
+      end
+    end
+
+    on(picked_color) do c
+      if !(c  == color[])
+        colors[cindex[]] = c
+        notify(update)
+      end
+    end
+
+    on(name) do str
+      delete!(namebox)
+      namebox = make_namebox(str)
+      on(namebox.stored_string) do str
+        if !(str == name[])
+          println("Updated name to $str")
+          names[cindex[]] = str
+          notify(update)
+        end
+      end
+    end
+  end
+
+  Label(layout[1, :], "Channel Configuration", fontsize = 18, font = :bold)
+  continue_button = Button(layout[1, :], label = "Continue", font = :bold, halign = :right)
+
+  rowgap!(layout, 1, Fixed(50))
+  rowsize!(layout, 4, Aspect(1.0, 1))
+
+  screen = Base.display(fig)
+  window = Makie.to_native(screen)
+
+  abort = true
+  on(continue_button.clicks) do _
+    abort = false
+    GLFW.SetWindowShouldClose(window, true)
+  end
+  
+  Base.wait(screen)
+
+  if abort
+    return nothing
+  else
+    return map(order) do index
+      @assert index == init_channels[index].cindex
+      return Channel(
+        init_channels[index].cindex,
+        names[index],
+        colors[index],
+      )
+    end
+  end
+end
+

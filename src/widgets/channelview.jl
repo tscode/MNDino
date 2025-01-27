@@ -69,11 +69,11 @@ function initcontext(widget::ChannelViewWidget, ctx)
   wctx[:nchannels] = length(wctx[:channels])
 
   # Entries for each channel
-  for c in wctx[:channels]
-    wctx[c.cindex] = Dict{Symbol, Any}()
+  for (index, c) in enumerate(wctx[:channels])
+    wctx[index] = Dict{Symbol, Any}()
 
-    wctx[c.cindex][:name] = Observable(c.name)
-    wctx[c.cindex][:color] = Observable(c.color)
+    wctx[index][:name] = Observable(c.name)
+    wctx[index][:color] = Observable(c.color)
 
     data = lift(wctx[:view]) do view
       img = wctx[:image][]
@@ -88,25 +88,25 @@ function initcontext(widget::ChannelViewWidget, ctx)
     end
     data_f = lift((f, data) -> f(data), wctx[:filter], data)
 
-    wctx[c.cindex][:data] = data_f
-    wctx[c.cindex][:size] = lift(size, data_f; ignore_equal_values = true)
-    wctx[c.cindex][:extrema] = lift(extrema, data_f)
+    wctx[index][:data] = data_f
+    wctx[index][:size] = lift(size, data_f; ignore_equal_values = true)
+    wctx[index][:extrema] = lift(extrema, data_f)
 
-    wctx[c.cindex][:crange] = Observable(wctx[c.cindex][:extrema][])
-    wctx[c.cindex][:axis] = Observable{Any}(nothing)
-    wctx[c.cindex][:mouse_value] = lift(wctx[:mouse_position]) do pos
+    wctx[index][:crange] = Observable(wctx[index][:extrema][])
+    wctx[index][:axis] = Observable{Any}(nothing)
+    wctx[index][:mouse_value] = lift(wctx[:mouse_position]) do pos
       return _value_at(data_f[], pos)
     end
 
-    wctx[c.cindex][:raw] = Dict{Symbol, Any}()
-    wctx[c.cindex][:raw][:data] = data
-    wctx[c.cindex][:raw][:size] = lift(size, data)
-    wctx[c.cindex][:raw][:extrema] = lift(extrema, data)
+    wctx[index][:raw] = Dict{Symbol, Any}()
+    wctx[index][:raw][:data] = data
+    wctx[index][:raw][:size] = lift(size, data)
+    wctx[index][:raw][:extrema] = lift(extrema, data)
 
-    addvariable!(vars, Symbol("C$(c.cindex)"), data)
+    addvariable!(vars, Symbol("C$index"), data)
 
-    onany(wctx[c.cindex][:name], wctx[c.cindex][:color]) do name, color
-      return wctx[:channels][c.cindex] = Channel(c.cindex, name, color)
+    onany(wctx[index][:name], wctx[index][:color]) do name, color
+      return wctx[:channels][index] = Channel(c.cindex, name, color)
     end
   end
 
@@ -126,7 +126,7 @@ function initcontext(widget::ChannelViewWidget, ctx)
 
   on(wctx[:image]) do img
     if nchannels(img) != wctx[:nchannels]
-      @warn """
+      @error """
       The number of channels changed when an image was selected.
       The channel view widget currently cannot handle this.
       For proper functionality, you should remove this image from the project.
@@ -250,7 +250,6 @@ end
 
 function _channelview_names(layout, yindex, wctx, theme)
   for index in 1:wctx[:nchannels]
-    cindex = wctx[:channels][index].cindex
     name = wctx[index][:name]
     color = wctx[index][:color]
     Box(
@@ -262,7 +261,7 @@ function _channelview_names(layout, yindex, wctx, theme)
     colgap!(sublayout, 2, 4)
     Label(
       sublayout[1, 2],
-      "C$cindex:";
+      "C$index:";
       font = :bold,
       fontsize = theme[:fontsize] + 1,
       halign = :right,

@@ -79,12 +79,16 @@ function plotwidget(::ProjectWidget, layout, wctx, theme)
   Label(layout[3, 1], "Path:"; fontsize = theme[:fontsize], halign = :right)
  
   path_str = lift(wctx[:path]) do path
-    return length(path) > 75 ? "..." * path[(end - 75):end] : path
+    if isempty(path)
+      return "<unsaved>"
+    else
+      return length(path) > 75 ? "..." * path[(end - 75):end] : path
+    end
   end
 
   path_label = Label(
     layout[3, 2],
-    isempty(path_str[]) ? "<unsaved>" : path_str[];
+    path_str;
     fontsize = theme[:fontsize],
     halign = :left,
   )
@@ -115,8 +119,8 @@ function plotwidget(::ProjectWidget, layout, wctx, theme)
     try
       notify(wctx[:update])
       project = updateproject(wctx[:ctx][:project], wctx[:ctx])
-      saveproject(project, path[])
       wctx[:path][] = path[]
+      saveproject(project, path[])
       fadelabel(save_label, "Project saved", colorant"darkgreen")
     catch err
       @error err

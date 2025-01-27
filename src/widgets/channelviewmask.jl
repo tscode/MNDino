@@ -8,6 +8,10 @@ end
 
 MaskData() = MaskData(OrderedDict{Int, Matrix{Bool}}())
 
+struct MNDinoContext <: StructPack.Context end
+
+StructPack.format(::Type{Matrix{Bool}}, ::MNDinoContext) = StructPack.BinArrayFormat()
+
 """
 Widget that extends a [`ChannelViewWidget`] by adding mask drawing and
 segmentation functionality.

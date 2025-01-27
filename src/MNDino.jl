@@ -71,7 +71,7 @@ end
 
 function complement(color::C) where {C <: Color}
   hsv = HSV(color)
-  hsv = HSV(mod(hsv.h + 180, 360), hsv.s, hsv.v)
+  hsv = HSV(mod(hsv.h + 180, 360), 1, 1)
   return C(hsv)
 end
 

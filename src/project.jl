@@ -101,17 +101,25 @@ function initproject(project, layouts; options)
 end
 
 """
+StructPack context used for MNDino project packing and unpacking.
+"""
+struct MNDinoContext <: StructPack.Context end
+
+StructPack.format(::Type{Matrix{Bool}}, ::MNDinoContext) = StructPack.BinArrayFormat()
+
+
+"""
     packproject(project::Project)
     packproject(io::IO, project::Project)
 
 Return or write a binary representation of `project`.
 """
 function packproject(project::Project)
-  return StructPack.pack(project)
+  return StructPack.pack(project, MNDinoContext())
 end
 
 function packproject(io::IO, project::Project)
-  return StructPack.pack(io, project)
+  return StructPack.pack(io, project, MNDinoContext())
 end
 
 """
@@ -121,11 +129,11 @@ end
 Unpack a project from its binary representation.
 """
 function unpackproject(bytes::Vector{UInt8})
-  return StructPack.unpack(bytes, Project)
+  return StructPack.unpack(bytes, Project, MNDinoContext())
 end
 
 function unpackproject(io::IO)
-  return StructPack.unpack(io, Project)
+  return StructPack.unpack(io, Project, MNDinoContext())
 end
 
 """

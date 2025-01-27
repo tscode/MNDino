@@ -277,7 +277,7 @@ end
 
 function wavelength_to_rgb(lambda)
   lambda = clamp(lambda, 400, 675)
-  hue = 270 * (lambda - 675) / 275
+  hue = 270 * (675 - lambda) / 275
   return RGB{Float32}(HSV(hue, 1, 1))
 end
 
