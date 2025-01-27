@@ -118,12 +118,13 @@ function plotwidget(::ProjectWidget, layout, wctx, theme)
     end
     try
       notify(wctx[:update])
-      project = updateproject(wctx[:ctx][:project], wctx[:ctx])
       wctx[:path][] = path[]
+      project = updateproject(wctx[:ctx][:project], wctx[:ctx])
       saveproject(project, path[])
       fadelabel(save_label, "Project saved", colorant"darkgreen")
     catch err
       @error err
+      wctx[:path][] = ""
       if err isa Base.IOError
         fadelabel(save_label, "Cannot write file", colorant"darkred")
       else
