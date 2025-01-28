@@ -13,10 +13,37 @@ Pkg.add(url="https://gitlab.gwdg.de/staudt1/mndino.git")
 ```
 A julia version of 1.9 or higher is strongly recommended. You can get julia from [here](https://julialang.org/downloads/).
 
-## Usage
-At the moment (version 0.2), only one GUI layout is included in MNDino. This layout can be accessed via `MNDino.main()`. A window will ask for image files (e.g., *.ims*) or an MNDino project file (*.dino*). Ideally, you start a julia environment with at least two threads (i.e., run `julia -t2`).
+## Running and Updating
+At the moment (version 0.2), only one GUI layout is included in MNDino.
+This layout can be accessed via
+```julia
+using MNDino
+MNDino.main()
+```
+A window will ask for image files (e.g., *.ims*) or an MNDino project file (*.dino*).
+Ideally, you start a julia environment with at least two threads (i.e., run `julia -t2`).
 
-After picking some files, you will be greeted by a user interface with several widgets. The following hints might help navigate the interaction options. They apply to version v0.1 and are likely subject to future change.
+If you have problems due to compability errors, it might help to use the same package environment that is used to develop MNDino.
+You can achieve this via
+```julia
+using Pkg
+Pkg.activate("MNDino")
+Pkg.instantiate()
+
+using MNDino
+MNDino.main()
+```
+
+In order to update your current MNDino installation, run
+```julia
+using Pkg
+Pkg.update("MNDino")
+```
+
+## Usage
+After picking some files and configuring the channel order, you will be greeted by a user interface with several widgets.
+The following hints might help navigate the interaction options.
+They apply to version v0.2 and are subject to future change.
 
 #### Generic navigation
 * The *left* / *right* keyboard arrow keys can be used to switch images.
