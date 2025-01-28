@@ -206,7 +206,7 @@ end
 function colorpicker(pos, color, default)
   ax = Axis(
     pos,
-    limits = ((0, 270), (0, 1)),
+    limits = ((-1, 271), (0, 1)),
     height = 15,
     spinewidth = 0.75,
   )
@@ -237,14 +237,14 @@ function colorpicker(pos, color, default)
     elseif event.type == MouseEventTypes.leftclick
       color[] = HSV(event.data[1], 1, 1)
     elseif event.type == MouseEventTypes.leftdoubleclick
-      color[] = default
+      color[] = default[]
     end
   end
 end
 
 function channelconfigurator(img::ImageFile)
   fig = Figure(size = (800, 500))
-  layout = GridLayout(fig[1,1], default_rowgap = 7, default_colgap = 25)
+  layout = GridLayout(fig[1,1], default_rowgap = 6, default_colgap = 25)
   init_channels = channels(img)
   thumbnails = map(init_channels) do c
     zindex = zindexdefault(img)
@@ -256,6 +256,7 @@ function channelconfigurator(img::ImageFile)
   end
   names = map(c -> c.name, init_channels)
   colors = map(c -> c.color, init_channels)
+  colors_default = copy(colors)
   order = collect(1:length(init_channels))
   update = Observable(nothing)
 
@@ -265,41 +266,40 @@ function channelconfigurator(img::ImageFile)
     color = Observable(colors[xindex])
     cindex = Observable(xindex)
 
-    Label(
-      layout[2, xindex],
-      "C$xindex",
-      fontsize = 14,
-      font = :bold,
-      tellwidth = false,
-      halign = :center,
-    )
-    Label(
-      layout[2, xindex],
-      lift(c -> "(c-index: $c)", cindex),
-      fontsize = 12,
-      tellwidth = false,
-      halign = :right,
-    )
-
-    # Name of the channel
     Box(
-      layout[3, xindex],
+      layout[2, xindex],
       strokevisible = false,
       color = lift(c -> 0.4c, color),
     )
-    make_namebox = str -> Textbox(layout[3, xindex],
+    Label(
+      layout[2, xindex],
+      "C$xindex",
+      fontsize = 13,
+      font = :bold,
+      tellwidth = false,
+      halign = :center,
+      color = RGB(0.98, 0.98, 0.98),
+      padding = (0, 0, 5, 5)
+    )
+    Label(
+      layout[2, xindex],
+      lift(c -> "c-index $c", cindex),
+      fontsize = 12,
+      tellwidth = false,
+      halign = :right,
+      color = RGBA(1, 1, 1, 0.8),
+      padding = (0, 7, 5, 5),
+    )
+
+    # Name of the channel
+    make_namebox = str -> Textbox(
+      layout[3, xindex],
       stored_string = str,
       font = :bold,
-      fontsize = 14,
+      fontsize = 13,
       halign = :center,
       bordercolor = :transparent,
-      bordercolor_hover = :transparent,
-      bordercolor_focused = :transparent,
-      boxcolor_hover = (:white, 0.1),
-      boxcolor_focused = (:white, 0.25),
-      cursorcolor = :transparent,
-      textcolor = RGB(0.98, 0.98, 0.98),
-      textpadding = (3, 3, 5, 5),
+      textpadding = (3, 3, 3, 3),
       cornerradius = 0,
       tellwidth = false,
     )
@@ -313,7 +313,11 @@ function channelconfigurator(img::ImageFile)
 
     # Plot the color chooser
     picked_color = lift(identity, color)
-    colorpicker(layout[5, xindex], picked_color, color[])
+    colorpicker(
+      layout[5, xindex],
+      picked_color,
+      lift(i -> colors_default[i], cindex),
+    )
 
     # Left / right buttons
     button_layout = GridLayout(layout[6, xindex], 1, 4, default_colgap = 5)
@@ -365,7 +369,9 @@ function channelconfigurator(img::ImageFile)
   Label(layout[1, :], "Channel Configuration", fontsize = 18, font = :bold)
   continue_button = Button(layout[1, :], label = "Continue", font = :bold, halign = :right)
 
-  rowgap!(layout, 1, Fixed(50))
+  rowgap!(layout, 1, Fixed(30))
+  rowgap!(layout, 2, Fixed(4))
+  rowgap!(layout, 3, Fixed(4))
   rowsize!(layout, 4, Aspect(1.0, 1))
 
   screen = Base.display(fig)

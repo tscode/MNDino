@@ -42,6 +42,8 @@ function plotwidget(::ProjectWidget, layout, wctx, theme)
     fontsize = theme[:titlesize],
     halign = :left,
     bordercolor = :transparent,
+    cornerradius = 0,
+    textpadding = (5, 5, 5, 5),
   )
 
   save_label = Label(

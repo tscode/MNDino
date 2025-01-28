@@ -250,38 +250,40 @@ end
 
 function _channelview_names(layout, yindex, wctx, theme)
   for index in 1:wctx[:nchannels]
+    cindex = wctx[:channels][index].cindex
     name = wctx[index][:name]
     color = wctx[index][:color]
+    sublayout = GridLayout(layout[yindex, index], 2, 3)
+    rowgap!(sublayout, 1, 4)
     Box(
-      layout[yindex, index];
+      sublayout[1, :];
       strokevisible = false,
       color = lift(c -> 0.4c, color),
     )
-    sublayout = GridLayout(layout[yindex, index], 1, 4)
-    colgap!(sublayout, 2, 4)
     Label(
-      sublayout[1, 2],
-      "C$index:";
+      sublayout[1, :],
+      "C$index";
       font = :bold,
       fontsize = theme[:fontsize] + 1,
-      halign = :right,
+      halign = :center,
       color = RGB(0.98, 0.98, 0.98),
       padding = (0, 0, 5, 5),
     )
+    Label(
+      sublayout[1, :],
+      "c-index $cindex";
+      fontsize = theme[:fontsize],
+      halign = :right,
+      color = RGBA(1, 1, 1, 0.8),
+      padding = (0, 7, 5, 5),
+    )
     name_textbox = Textbox(
-      sublayout[1, 3];
+      sublayout[2, :];
       stored_string = name,
-      font = :bold,
       fontsize = theme[:fontsize] + 1,
-      halign = :left,
+      halign = :center,
       bordercolor = :transparent,
-      bordercolor_hover = :transparent,
-      bordercolor_focused = :transparent,
-      boxcolor_hover = (:white, 0.1),
-      boxcolor_focused = (:white, 0.25),
-      cursorcolor = :transparent,
-      textcolor = RGB(0.98, 0.98, 0.98),
-      textpadding = (3, 3, 5, 5),
+      textpadding = (3, 3, 3, 3),
       cornerradius = 0,
     )
     on(name_textbox.stored_string) do name
@@ -460,8 +462,7 @@ function _channelview_zselector(layout, xindex, wctx, theme)
     sublayout[2, 1],
     lift(string, wctx[:zindex]);
     rotation = -90 / 180 * pi,
-    # color = :darkgray,
-    fontsize = theme[:fontsize],
+    fontsize = theme[:ticksize],
   )
   slider = Slider(
     sublayout[3, 1];
