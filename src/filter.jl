@@ -1,6 +1,8 @@
 
 abstract type Filter end
 
+@pack {<: Filter} in TypedFormat{StructFormat}
+
 struct GaussFilter <: Filter
   radius::Int
 end

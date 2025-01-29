@@ -1,4 +1,8 @@
 
+# TODO: include variant selection here?
+# Would require a variant shelf. This would be possible if either
+# - variants are always very simple (string -> int mappings)
+# - variants become storables. Then they cannot be anonymous anymore
 """
 Widget for the graphical selection of images from the project repository.
 """
@@ -19,25 +23,21 @@ function initcontext(widget::ImageSelectorWidget, ctx)
 
   store = loadcontext(ctx, wctx[:image_store])
 
-  wctx[:paths] = lift(entries -> location.(entries), store[:entries])
-  wctx[:path] = lift(location, store[:entry])
-  wctx[:image] = lift(imagefile, store[:entry])
-  wctx[:last_index] = lift(length, store[:entries])
-
-  wctx[:meta] = lift(wctx[:image]) do image
-    map(1:nchannels(image)) do index
-      metadata(image, index)
-    end
-  end
-
-  wctx[:nzlayers] = lift(nzlayers, wctx[:image])
-  wctx[:nchannels] = lift(nchannels, wctx[:image])
-  wctx[:size] = lift(m -> m[1].size[1:2], wctx[:meta])
+  wctx[:path] = store[:path]
+  wctx[:image] = store[:image]
+  wctx[:paths] = store[:paths]
 
   wctx[:active_index] = store[:active_index]
   wctx[:select_index] = store[:select_index]
   wctx[:select_prev] = store[:select_prev]
   wctx[:select_next] = store[:select_next]
+
+  wctx[:last_index] = lift(length, store[:entries])
+
+  wctx[:meta] = lift(metadata, wctx[:image])
+  wctx[:nzlayers] = lift(nzlayers, wctx[:image])
+  wctx[:nchannels] = lift(nchannels, wctx[:image])
+  wctx[:resolution] = lift(m -> m.resolution, wctx[:meta])
 
   return wctx
 end
@@ -45,7 +45,6 @@ end
 gridlayoutoptions(::ImageSelectorWidget, wctx) = (size = (5, 2),)
 
 function plotwidget(::ImageSelectorWidget, layout, wctx, theme)
-
   Label(
     layout[1, :],
     wctx[:title],
@@ -93,13 +92,13 @@ function plotwidget(::ImageSelectorWidget, layout, wctx, theme)
 
   Label(
     layout[3, 1],
-    "Z-Layers:",
+    "Resolution:",
     fontsize = theme[:fontsize],
     halign = :right,
   )
   Label(
     layout[3, 2],
-    lift(string, wctx[:nzlayers]),
+    lift(m -> string(m.resolution), wctx[:meta]),
     fontsize = theme[:fontsize],
     halign = :left,
     tellwidth = false,
@@ -107,13 +106,13 @@ function plotwidget(::ImageSelectorWidget, layout, wctx, theme)
 
   Label(
     layout[4, 1],
-    "Resolution:",
+    "Z-Layers:",
     fontsize = theme[:fontsize],
     halign = :right,
   )
   Label(
     layout[4, 2],
-    lift(string, wctx[:size]),
+    lift(string, wctx[:nzlayers]),
     fontsize = theme[:fontsize],
     halign = :left,
     tellwidth = false,

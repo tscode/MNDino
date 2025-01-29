@@ -1,113 +1,354 @@
 
 """
-Wrapper of an microscopy imaging file.
+Default channel colors if they cannot be derived from metadata.
+"""
+const _default_colors = [
+  colorant"red",
+  colorant"green",
+  colorant"blue",
+  colorant"orange",
+  colorant"purple",
+]
 
-Optical microscopy imaging data is often stored in more or less sophisticated
-file formats that allow for lazy and partial reading of slices of imaging data.
+function _getcolor(index)
+  index = mod1(index, length(_default_colors))
+  return _default_colors[index]
+end
 
-At the very least, an `ImageFile` collects 2D intensity information (represented
-as `Matrix`) for a specific number of channels (or colors). Usually several
-layers of such information along the Z-dimension are stacked. Sometimes,
-variants of imaging data (like images for different timepoints or resolution
-levels) are stored as well.
+"""
+Metadata object for an image channel.
+
+Stores the index of the channel in the image, the channel name, and the channel color.
+"""
+struct Channel
+  cindex::Int
+  name::String
+  color::RGBf
+end
+
+@pack Channel in StructFormat [color in StructFormat]
+
+struct ChannelSlice{M <: AbstractMatrix}
+  cindex::Int
+  name::String
+  color::RGBf
+  data::M
+end
+
+"""
+The dimension ordering of an 5d (XYZCT) image array.
+"""
+struct DimensionOrder
+  x::Int
+  y::Int
+  z::Int
+  c::Int
+  t::Int
+end
+
+"""
+    DimensionOrder(str)  
+
+Obtain the dimension ordering from the string `str`.
+
+This string must only contain a subset of the symbols "XYZCT", where "X" and "Y"
+are required and "ZCT" are optional.
+"""
+function DimensionOrder(str)
+  keys = ['x', 'y', 'z', 'c', 't']
+  lstr = lowercase(str)
+  @assert all(s -> s in keys, collect(lstr)) """
+  Dimension string '$str' contains unrecognized dimensions.
+  """
+  indices = map(keys) do key
+    index = findfirst(key, lstr)
+    index = isnothing(index) ? 0 : index
+    @assert 0 <= index <= 5
+    return index
+  end
+  @assert indices[1] > 0 && indices[2] > 0 """
+  Dimension string '$str does not contain X or Y dimension.
+  """
+  return DimensionOrder(indices...)
+end
+
+"""
+    orderdims(s, order::DimensionOrder) 
+
+Adapt the input tuple `s`, which is assumed to be in XYZCT ordering, to the
+ordering defined by `order`.
+"""
+function orderdims(s, order::DimensionOrder)
+  @assert length(s) == 5
+  pairs = map(k -> k => getfield(order, k), [:x, :y, :z, :c, :t])
+  perm = sortperm(pairs; by = pair -> pair[2])
+  filter!(index -> pairs[index][2] != 0, perm)
+  return Tuple(s[index] for index in perm)
+end
+
+"""
+    orderpartialdims(s, order::DimensionOrder) 
+
+Adapt the input tuple `s`, which is assumed to be in ZCT ordering, to the
+ordering defined by `order`.
+
+Assumes that XY or YX are the first two dimensions.
+"""
+function orderpartialdims(s, order::DimensionOrder)
+  @assert length(s) == 3
+  pairs = map(k -> k => getfield(order, k), [:z, :c, :t])
+  perm = sortperm(pairs; by = pair -> pair[2])
+  filter!(index -> pairs[index][2] != 0, perm)
+  return Tuple(s[index] for index in perm)
+end
+
+"""
+    revorderdims(s, order::DimensionOrder)
+
+Undo the effect of `orderdims` and return a tuple in XYZCT ordering.
+"""
+function revorderdims(s, order::DimensionOrder)
+  @assert length(s) == 5
+  return (s[order.x], s[order.y], s[order.z], s[order.c], s[order.t])
+end
+
+"""
+    revorderpartialdims(s, order::DimensionOrder)
+
+Undo the effect of `orderpartialdims` and return a tuple in ZCT ordering.
+
+Assumes that XY or YX are the first two dimensions.
+"""
+function revorderpartialdims(s, order::DimensionOrder)
+  @assert length(s) == 3
+  return (s[order.z-2], s[order.c-2], s[order.t-2])
+end
+
+"""
+Wrapper of an image file.
+
+The image files of interest for MNDino, particularly microscopy images, are
+often stored in complex formats that allow for lazy and partial reading of
+slices of the data.
+
+At the very least, an image collects 2D intensity information (X and Y
+dimensions) for a specific number of channels (C dimension).
+Usually several layers of such information are stacked along a Z dimension and
+sometimes an additional T (time) dimension.
+
+Depending on the specific format, varying amounts of metadata can be stored.
+In some cases, variants of the imaging data, like different resolution levels,
+are stored as well.
 """
 abstract type ImageFile end
-
-extension(::I) where {I <: ImageFile} = extension(I)
-
-"""
-    nchannels(img::ImageFile)
-
-Return the number of channels of `img`.
-"""
-function nchannels end
-
-"""
-    nzlayers(img::ImageFile)
-
-Return the number of Z-layers of `img`
-"""
-function nzlayers end
-
-"""
-    variants(img::ImageFile)
-
-Returns a named tuple of variant information of `img`.
-
-An example could be `variants(img) = (time = 0:10, resolution = 0:4)` if `img`
-contains imaging data for `11` time points and `4` resolution levels.
-"""
-function variants end
-
-"""
-    defaultvariant(img::ImageFile)
-
-Returns the default variant of `img`.
-"""
-function defaultvariant end
-
-"""
-    defaultzindex(img::ImageFile)
-
-Returns a default valid z-index of `img`.
-"""
-function defaultzindex end
-
-"""
-    metadata(img::ImageFile, cindex; variant_options...)
-
-Retrieve a named tuple of metadata information about the image slice with
-channel index `cindex`. Additional options rely on `img`.
-
-This operation should be fast.
-"""
-function metadata end
-
-"""
-    channelname(img::ImageFile, cindex; variant_options...) 
-
-Retrieve the name of the channel at `cindex`.
-"""
-function channelname end
-
-"""
-    channelcolor(img::ImageFile, cindex; variant_options...) 
-
-Retrieve the color of the channel at `cindex`.
-"""
-function channelcolor end
-
-"""
-    imagedata(img::ImageFile, zindex, cindex; variant_options...)
-
-Retrieve the intensity information of the image slice with Z index `zindex` and
-channel index `cindex`. Additional options rely on `img`.
-
-Depending on the image, this operation can potentially be slow and memory
-intensive.
-"""
-function imagedata end
 
 """
     location(img::ImageFile) 
 
-If implemented, returns the location (path) of an image on the hard drive.
+Returns the location (path) of an image on the hard drive.
 
-Defaults to "".
+Returns the empty string `""` if no meaningful path exists.
 """
 function location(::ImageFile)
   return ""
 end
 
 """
-Global format storage. Can be extende by new subtypes of `ImageFile`.
-"""
-const FORMATS = Dict{String, Type{<: ImageFile}}()
+    extensions(I::Type{<: ImageFile}) 
+    extensions(::I) where {I <: ImageFile} 
 
-function register_format!(::Type{I}) where {I <: ImageFile}
-  ext = extension(I)
-  FORMATS[ext] = I
+List of supported file extensions for the image file backend `I`.
+"""
+extensions(::I) where {I <: ImageFile} = extensions(I)
+
+"""
+    nchannels(img::ImageFile)
+
+Return the number of channels in `img`..
+"""
+function nchannels end
+
+"""
+    nzlayers(img::ImageFile)
+
+Return the number of Z-layers in `img`.
+"""
+function nzlayers end
+
+"""
+    ntlayers(img::ImageFile)
+
+Return the number of time layers in `img`.
+"""
+function ntlayers end
+
+"""
+    nplanes(img::ImageFile)
+
+Return the number of XY planes stored in `img`.
+
+Equals `nchannels(img) * nzlayers(img) * ntlayers(img)`.
+"""
+function nplanes(img::ImageFile)
+  return nchannels(img) * nzlayers(img) * ntlayers(img)
+end
+
+"""
+    planesize(img::ImageFile; kwargs...)
+
+Return the size of the XY planes in the image.
+"""
+function planesize end
+
+"""
+    variants(img::ImageFile)
+
+Returns a named tuple of variant information of `img`.
+
+An example could be `variants(img) = (resolution = 0:4)` if `img`
+contains imaging data for `5` resolution levels. This is common for the Imaris
+file format (supported by`ImarisFile`).
+"""
+function variants end
+
+"""
+    variantdefault(img::ImageFile)
+
+Returns the default variant of `img`.
+"""
+function variantdefault end
+
+"""
+    zindexdefault(img::ImageFile)
+
+Returns a default valid z-index of `img`.
+"""
+function zindexdefault end
+
+"""
+    tindexdefault(img::ImageFile)
+
+Returns a default valid t-index of `img`.
+"""
+function tindexdefault end
+
+"""
+    channels(img::ImageFile) 
+
+Retrive the channel specification of `img`.
+
+The channels must be ordered according to their channel index.
+See [`Channel`](@ref) for more details.
+"""
+function channels end
+
+"""
+    channelnames(img::ImageFile)  
+
+Retrieve all channel names of `img`.
+"""
+function channelnames(img::ImageFile)
+  return map(c -> c.name, channels(img))
+end
+
+"""
+    channelname(img::ImageFile, cindex) 
+
+Retrieve the name of the channel at `cindex`.
+
+"""
+function channelname(img::ImageFile, cindex)
+  return channelnames(img)[cindex]
+end
+
+"""
+    channelcolors(img::ImageFile)  
+
+Retrieve all channel colors of `img`.
+
+See also [`channelcolor`](@ref).
+"""
+function channelcolors(img::ImageFile)
+  return map(c -> c.color, channels(img))
+end
+
+"""
+    channelcolor(img::ImageFile, cindex) 
+
+Retrieve the color of the channel at `cindex`.
+
+See also [`channelcolors`](@ref).
+"""
+function channelcolor(img::ImageFile, cindex)
+  return channelcolors(img)[cindex]
+end
+
+"""
+    metadata(img::ImageFile; kwargs...)
+
+Retrieve a named tuple of common metadata information about `img`. 
+
+The returned metadata object will depend on the image file format and
+the loader capabilities.
+
+Additional keyword arguments specify the variant of `img`.
+"""
+function metadata end
+
+"""
+    imagedata(img::ImageFile; kwargs...)
+
+Retrieve the full image data stored in `img`.
+
+Additional keyword arguments specify the variant of `img`.
+
+!!! note
+
+    Depending on the image and the backend, this operation can potentially be
+    slow and memory intensive. Some backends will for this reason not implement
+    `imagedata(img)` and may require scalars for indexing.
+
+---
+
+    imagedata(img::ImageFile, zindex, cindex, tindex; kwargs...)
+
+Retrieve the 2d XY slice of image data stored at a given index for the Z,
+channel, and time dimension.
+
+Additional keyword arguments specify the variant of `img`.
+"""
+function imagedata end
+
+function imagedata(img::I; kwargs...) where {I <: ImageFile}
+  return error("""
+         Image file backend $I does not support collecting the full image data
+         """)
+end
+
+"""
+Global image format storage.
+
+Can be extended by registering new subtypes of
+`[ImageFile](@ref)` via `[registerformat!](@ref)`.
+"""
+const IMAGE_FORMATS = Dict{String, Type{<:ImageFile}}()
+
+function registerformat!(::Type{I}) where {I <: ImageFile}
+  exts = extensions(I)
+  for ext in exts
+    @assert !haskey(IMAGE_FORMATS, ext) """
+    Image file extension $ext is already registered.
+    """
+    IMAGE_FORMATS[ext] = I
+  end
   return
+end
+
+function fitsextension(path, I::Type{<:ImageFile})
+  return any(extensions(I)) do ext
+    re = Regex(ext * "\$")
+    return !isnothing(match(re, path))
+  end
 end
 
 """
@@ -116,10 +357,17 @@ end
 Load the image file located at `path`.
 """
 function loadimagefile(path)
-  _, ext = splitext(path)
-  @assert ext in keys(FORMATS) """
-  Unsupported extension $ext at $path. 
+  exts = collect(keys(IMAGE_FORMATS))
+  # check all extensions against the file name
+  exts = filter(exts) do ext
+    re = Regex(ext * "\$")
+    return !isnothing(match(re, path))
+  end
+  @assert !isempty(exts) """
+  Unsupported extension at '$path'. 
   """
-  I = FORMATS[ext]
+  # pick the longest match. E.g., this would pick ".ome.tiff" over ".tiff"
+  exts = sort(exts; by = length)
+  I = IMAGE_FORMATS[exts[end]]
   return I(path)
 end

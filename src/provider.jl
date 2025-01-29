@@ -13,6 +13,8 @@ with are called `Widgets`.
 """
 abstract type Provider end
 
+@pack {<: Provider} in TypedFormat{StructFormat}
+
 """
     initcontext(provider::Provider, ctx)
 

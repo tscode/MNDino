@@ -6,17 +6,44 @@ This repository contains a julia package called MNDino. MNDino aspires to become
 As a library, MNDino aims to provide a number of general purpose widgets that can conveniently be combined to fit a range of different workflows. For now,  the development focus will be a specific GUI layout that targets multi-channel microscopy images.
 
 ## Installation
-The package is not yet officially registered. Use the following commands within a julia shell to install the package.
+The package is not yet officially registered. Use the following commands within a julia shell to install the latest stable version of the package.
 ```julia
 using Pkg
-Pkg.add("https://gitlab.gwdg.de/staudt1/mndino.git")
+Pkg.add(url="https://gitlab.gwdg.de/staudt1/mndino.git")
 ```
-A julia version 1.9 or higher is strongly recommended. You can get julia from [here](https://julialang.org/downloads/).
+A julia version of 1.9 or higher is strongly recommended. You can get julia from [here](https://julialang.org/downloads/).
+
+## Running and Updating
+At the moment (version 0.2), only one GUI layout is included in MNDino.
+This layout can be accessed via
+```julia
+using MNDino
+MNDino.main()
+```
+A window will ask for image files (e.g., *.ims*) or an MNDino project file (*.dino*).
+Ideally, you start a julia environment with at least two threads (i.e., run `julia -t2`).
+
+If you have problems due to compability errors, it might help to use the same package environment that is used to develop MNDino.
+You can achieve this via
+```julia
+using Pkg
+Pkg.activate("MNDino")
+Pkg.instantiate()
+
+using MNDino
+MNDino.main()
+```
+
+In order to update your current MNDino installation, run
+```julia
+using Pkg
+Pkg.update("MNDino")
+```
 
 ## Usage
-At the moment (as of version *v0.1*), only one GUI layout is included in MNDino. This layout can be accessed via `MNDino.main()`. A window will ask for image files (e.g., *.ims*) or an MNDino project file (*.dino*). Ideally, you start a julia environment with at least two threads (i.e., run `julia -t2`).
-
-After loading some files, you will be greeted by a user interface with several widgets. While most interaction options should be transparent, the following hints might help. They apply to version *v0.1* and are probably subject to future change.
+After picking some files and configuring the channel order, you will be greeted by a user interface with several widgets.
+The following hints might help navigate the interaction options.
+They apply to version v0.2 and are subject to future change.
 
 #### Generic navigation
 * The *left* / *right* keyboard arrow keys can be used to switch images.
@@ -51,11 +78,10 @@ The following is a simple example:
 inputs = (:C1, :C2, :S1)
 
 # We declare the following outputs from our script.
-# We add some documentation to clarify what the outputs refer to.
 outputs = (
-  meanC1 => "The mean value of channel C1",
-  meanC1S1 => "The mean value of channel C1 restricted to S1"
-  meanC2S1 => "The mean of C2 weighted by C1 restricted to S1"
+  :meanC1,
+  :meanC1S1,
+  :meanC2S1,
 )
 
 # Here, we implement the actual computations that generate our outputs
@@ -73,8 +99,11 @@ end
 ```
 
 ## Limitations
-Currently, only images in the [Imaris file format](https://imaris.oxinst.com/support/imaris-file-format) are supported. Such images, with the file extension `.ims`, are typically produced by a (fluorescent) microscope. Feel free to submit an issue if you would like to see support for other formats!
+Currently, images in the [Imaris file format](https://imaris.oxinst.com/support/imaris-file-format) and the [OME-TIFF format](https://docs.openmicroscopy.org/ome-model/5.6.3/ome-tiff/) are supported.
+Such images are typically produced by (fluorescent) microscopes.
+Feel free to submit an issue if you have issues with these file types or would like to see support for other formats.
 
 ## Acknowledgements
-MNDino is powered by the awesome plotting library [GLMakie](https://docs.makie.org/stable/). The development also profits greatly from the image analysis tools in [Images](https://github.com/JuliaImages/Images.jl).
+MNDino is powered by the plotting library [GLMakie](https://docs.makie.org/stable/).
+The development also profits greatly from the image analysis tools in [Images](https://github.com/JuliaImages/Images.jl).
 

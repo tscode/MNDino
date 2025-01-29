@@ -1,10 +1,4 @@
 
-struct Segment <: Widget
-  mask::BitMatrix
-  color::Color
-  source::Int
-end
-
 struct SegmentsWidget <: Widget
   title::String
   segment_provider::Symbol
@@ -22,12 +16,22 @@ function initcontext(widget::SegmentsWidget, ctx)
 
   wctx[:nmasks] = mpctx[:nmasks]
   wctx[:masks] = Dict{Int, Any}()
+  wctx[:size] = Observable{NTuple{2, Int}}(
+    (0, 0),
+    ignore_equal_values = true,
+  )
+  wctx[:downscaling] = mpctx[:downscaling]
 
   for index in 1:wctx[:nmasks]
     wctx[:masks][index] = Dict{Symbol, Any}()
     wctx[:masks][index][:mask] = mpctx[index][:mask]
     wctx[:masks][index][:color] = mpctx[index][:color]
     wctx[:masks][index][:name] = mpctx[index][:name]
+    if index == 1
+      on(mpctx[index][:size]) do sz
+        wctx[:size][] = sz
+      end
+    end
   end
 
   return wctx
@@ -64,15 +68,34 @@ function _segments_showsegments(layout, wctx, theme)
   Makie.deregister_interaction!(ax, :dragpan)
 
   for index in 1:wctx[:nmasks]
+    mask = wctx[:masks][index][:mask]
+
+    mask_sz = lift(Base.size, mask, ignore_equal_values = true)
+    mask_scaled = lift(mask_sz, wctx[:downscaling]) do sz, scaling
+      sz_scaled = div.(sz, scaling, RoundUp)
+      ImageTransformations.imresize(mask[], sz_scaled)
+    end
+
+    on(mask) do data
+      ImageTransformations.imresize!(mask_scaled[], data)
+      notify(mask_scaled)
+    end
+
     Makie.image!(
       ax,
-      wctx[:masks][index][:mask];
+      lift(sz -> (0, sz[1]), mask_sz),
+      lift(sz -> (0, sz[2]), mask_sz),
+      mask_scaled;
       colorrange = (0.0, 1.0),
       colormap = lift(
         c -> [(:black, 0.01), (0.8c, 0.5)],
         wctx[:masks][index][:color],
       ),
     )
+  end
+
+  on(wctx[:size]) do sz
+    ax.limits[] = ((0, sz[1]), (0, sz[2]))
   end
 
   sublayout = GridLayout(layout[2, 2], 3wctx[:nmasks], 1)

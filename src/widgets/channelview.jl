@@ -1,26 +1,13 @@
 
-"""
-Metadata object for an image channel.
-
-Stores the index of the channel in the image, the channel name, and an optional
-channel color.
-"""
-struct ChannelSpec
-  index::Int
-  name::String
-  color::Color
-end
-
-struct View2D
+struct View <: Storable
   zindex::Int
-  variant::NamedTuple
+  tindex::Int
 end
 
 struct ChannelViewWidget <: Widget
   title::String
   filter::Filter
-  channels::Vector{ChannelSpec}
-  default_view::Union{View2D, Nothing}
+  channels::Vector{Channel}
   image_store::Symbol
   variable_store::Symbol
 end
@@ -31,38 +18,18 @@ function ChannelViewWidget(
   variable_store,
   channels = [],
   filter = NoFilter(),
-  default_view = nothing,
 )
-  return ChannelViewWidget(
-    title,
-    filter,
-    channels,
-    default_view,
-    image_store,
-    variable_store,
-  )
+  return ChannelViewWidget(title, filter, channels, image_store, variable_store)
 end
 
-function _derive_channel_specs(image; variant = nothing)
-  return map(1:nchannels(image)) do cindex
-    meta = metadata(image, cindex; variant)
-    return ChannelSpec(cindex, meta.name, meta.color)
-  end
-end
-
-function _derive_default_view(image)
-  return View2D(defaultzindex(image), defaultvariant(image))
+function _viewdefault(image)
+  return View(zindexdefault(image), tindexdefault(image))
 end
 
 function initcontext(widget::ChannelViewWidget, ctx)
   wctx = Dict{Union{Symbol, Int}, Any}()
 
-  loadentries!(
-    wctx,
-    widget,
-    [:title, :filter => Filter, :default_view];
-    obs = true,
-  )
+  loadentries!(wctx, widget, [:title, :filter => Filter]; obs = true)
 
   loadentries!(
     wctx,
@@ -74,24 +41,22 @@ function initcontext(widget::ChannelViewWidget, ctx)
   # Load the variable store. 2D channel views C1 to Cn will be defined.
   vars = loadcontext(ctx, wctx[:variable_store])
 
-  # Load the image store. z-layer and variant selections for each
+  # Load the image store. z-layer selections for each
   # image will be stored in the shelf
   store = loadcontext(ctx, wctx[:image_store])
-  shelf = addshelf!(store, :channelview)
+  loadentries!(wctx, store, [:entry, :image])
+  shelf = addshelf!(store, :channelview, View)
 
-  loadentries!(wctx, store, [:entry])
-
-  wctx[:image] = lift(imagefile, wctx[:entry])
   wctx[:nzlayers] = lift(nzlayers, wctx[:image])
 
   wctx[:view] = Observable(get(shelf, wctx[:entry][].id) do
-    return _derive_default_view(wctx[:image][])
+    return _viewdefault(wctx[:image][])
   end)
   wctx[:zindex] = lift(getvalue(:zindex), wctx[:view])
-  wctx[:variant] = lift(getvalue(:variant), wctx[:view])
+  wctx[:tindex] = lift(getvalue(:tindex), wctx[:view])
 
   addvariable!(vars, :zindex, wctx[:zindex])
-  addvariable!(vars, :variant, wctx[:variant])
+  addvariable!(vars, :tindex, wctx[:tindex])
 
   wctx[:mouse_position] = Observable(Point2f(NaN, NaN))
   wctx[:focused] = Observable(-1; ignore_equal_values = true)
@@ -99,58 +64,74 @@ function initcontext(widget::ChannelViewWidget, ctx)
 
   # Automatically derive channels from first image if not provided
   if isempty(wctx[:channels])
-    wctx[:channels] = _derive_channel_specs(wctx[:image][])
+    wctx[:channels] = channels(wctx[:image][])
   end
   wctx[:nchannels] = length(wctx[:channels])
 
   # Entries for each channel
-  for c in wctx[:channels]
-    wctx[c.index] = Dict{Symbol, Any}()
+  for (index, c) in enumerate(wctx[:channels])
+    wctx[index] = Dict{Symbol, Any}()
 
-    wctx[c.index][:name] = Observable(c.name)
-    wctx[c.index][:color] = Observable(c.color)
+    wctx[index][:name] = Observable(c.name)
+    wctx[index][:color] = Observable(c.color)
 
     data = lift(wctx[:view]) do view
       img = wctx[:image][]
-      # TODO: this is currently inefficient, since both
-      # :image and :view are updated each time the path changes
-      return Float32.(imagedata(img, c.index, view.zindex; view.variant...))
+      variant = (;) # TODO: The variant will eventually come from the selection widget?
+      if c.cindex > nchannels(img)
+        return zeros(Float32, planesize(img; variant...))
+      else
+        return Float32.(
+          imagedata(img, view.zindex, c.cindex, view.tindex; variant...)
+        )
+      end
     end
     data_f = lift((f, data) -> f(data), wctx[:filter], data)
 
-    wctx[c.index][:data] = data_f
-    wctx[c.index][:size] = lift(size, data_f; ignore_equal_values = true)
-    wctx[c.index][:extrema] = lift(extrema, data_f)
+    wctx[index][:data] = data_f
+    wctx[index][:size] = lift(size, data_f; ignore_equal_values = true)
+    wctx[index][:extrema] = lift(extrema, data_f)
 
-    wctx[c.index][:crange] = Observable(wctx[c.index][:extrema][])
-    wctx[c.index][:axis] = Observable{Any}(nothing)
-    wctx[c.index][:mouse_value] = lift(wctx[:mouse_position]) do pos
+    wctx[index][:crange] = Observable(wctx[index][:extrema][])
+    wctx[index][:axis] = Observable{Any}(nothing)
+    wctx[index][:mouse_value] = lift(wctx[:mouse_position]) do pos
       return _value_at(data_f[], pos)
     end
 
-    wctx[c.index][:raw] = Dict{Symbol, Any}()
-    wctx[c.index][:raw][:data] = data
-    wctx[c.index][:raw][:size] = lift(size, data)
-    wctx[c.index][:raw][:extrema] = lift(extrema, data)
+    wctx[index][:raw] = Dict{Symbol, Any}()
+    wctx[index][:raw][:data] = data
+    wctx[index][:raw][:size] = lift(size, data)
+    wctx[index][:raw][:extrema] = lift(extrema, data)
 
-    addvariable!(vars, Symbol("C$(c.index)"), data)
+    addvariable!(vars, Symbol("C$index"), data)
 
-    onany(wctx[c.index][:name], wctx[c.index][:color]) do name, color
-      return wctx[:channels][c.index] = ChannelSpec(c.index, name, color)
+    onany(wctx[index][:name], wctx[index][:color]) do name, color
+      return wctx[:channels][index] = Channel(c.cindex, name, color)
     end
   end
 
   # React if the selected image changes
   # TODO: Handle the situation where entries are nothing!
   on(store[:change]) do (next, prev)
-    shelf[prev.id] = View2D(wctx[:zindex][], wctx[:variant][])
+    shelf[prev.id] = View(wctx[:zindex][], wctx[:tindex][])
     wctx[:view][] = get(shelf, next.id) do
-      return _derive_default_view(imagefile(next))
+      return _viewdefault(imagefile(next))
     end
   end
 
-  on(store[:update]) do current
-    return shelf[current.id] = View2D(wctx[:zindex][], wctx[:variant][])
+  on(store[:update]) do _
+    entry = store[:entry][]
+    return shelf[entry.id] = View(wctx[:zindex][], wctx[:tindex][])
+  end
+
+  on(wctx[:image]) do img
+    if nchannels(img) != wctx[:nchannels]
+      @error """
+      The number of channels changed when an image was selected.
+      The channel view widget currently cannot handle this.
+      For proper functionality, you should remove this image from the project.
+      """
+    end
   end
 
   return wctx
@@ -168,7 +149,7 @@ end
 
 function _channelview_filename(layout, yindex, wctx, theme)
   Label(
-    layout[2, :],
+    layout[yindex, :],
     lift(basename, wctx[:entry]);
     fontsize = theme[:fontsize],
     color = (:black, 0.7),
@@ -229,10 +210,7 @@ function _channelview_topline(layout, yindex, wctx, theme)
 
   on(reset_button.clicks) do _
     notify(wctx[:reset_clipping])
-    view = wctx[:default_view][]
-    if isnothing(view)
-      view = _derive_default_view(wctx[:image][])
-    end
+    view = _viewdefault(wctx[:image][])
     wctx[:view][] = view
     set_close_to!(filter_slider, 1)
     return filter_toggle.active[] = false
@@ -272,39 +250,40 @@ end
 
 function _channelview_names(layout, yindex, wctx, theme)
   for index in 1:wctx[:nchannels]
-    cindex = wctx[:channels][index].index
+    cindex = wctx[:channels][index].cindex
     name = wctx[index][:name]
     color = wctx[index][:color]
+    sublayout = GridLayout(layout[yindex, index], 2, 3)
+    rowgap!(sublayout, 1, 4)
     Box(
-      layout[yindex, index];
+      sublayout[1, :];
       strokevisible = false,
       color = lift(c -> 0.4c, color),
     )
-    sublayout = GridLayout(layout[yindex, index], 1, 4)
-    colgap!(sublayout, 2, 4)
     Label(
-      sublayout[1, 2],
-      "C$cindex:";
+      sublayout[1, :],
+      "C$index";
       font = :bold,
       fontsize = theme[:fontsize] + 1,
-      halign = :right,
+      halign = :center,
       color = RGB(0.98, 0.98, 0.98),
       padding = (0, 0, 5, 5),
     )
+    Label(
+      sublayout[1, :],
+      "c-index $cindex";
+      fontsize = theme[:fontsize],
+      halign = :right,
+      color = RGBA(1, 1, 1, 0.8),
+      padding = (0, 7, 5, 5),
+    )
     name_textbox = Textbox(
-      sublayout[1, 3];
+      sublayout[2, :];
       stored_string = name,
-      font = :bold,
       fontsize = theme[:fontsize] + 1,
-      halign = :left,
+      halign = :center,
       bordercolor = :transparent,
-      bordercolor_hover = :transparent,
-      bordercolor_focused = :transparent,
-      boxcolor_hover = (:white, 0.1),
-      boxcolor_focused = (:white, 0.25),
-      cursorcolor = :transparent,
-      textcolor = RGB(0.98, 0.98, 0.98),
-      textpadding = (3, 3, 5, 5),
+      textpadding = (3, 3, 3, 3),
       cornerradius = 0,
     )
     on(name_textbox.stored_string) do name
@@ -321,6 +300,9 @@ function _channelview_histograms(layout, yindex, wctx, theme)
 
   axes = map(1:nchannels) do index
     limits = lift(wctx[index][:extrema]) do minmax
+      if minmax[1] == minmax[2] # prevent degenerate axis limits
+        minmax = (minmax[1] - 1.0f-5, minmax[2] + 1.0f-5)
+      end
       return (minmax, (0, nothing))
     end
     values = lift(wctx[index][:data]) do data
@@ -380,7 +362,6 @@ end
 
 function _channelview_slices(layout, yindex, wctx, theme)
   axes = map(1:wctx[:nchannels]) do index
-    # Box(layout[yindex, index]; color = (:black, 0.05), strokevisible = false)
     ax = Axis(
       layout[yindex, index];
       aspect = DataAspect(),
@@ -400,8 +381,9 @@ function _channelview_slices(layout, yindex, wctx, theme)
       colorrange = wctx[index][:crange],
       colormap = lift(c -> [:black, c], wctx[index][:color]),
     )
-    onany(wctx[:entry], wctx[index][:size]) do _, _
-      return reset_limits!(ax)
+    onany(wctx[:entry], wctx[index][:size]) do _, sz
+      ax.limits[] = ((0, sz[1]), (0, sz[2]))
+      return
     end
     wctx[index][:axis][] = ax
     return ax
@@ -429,6 +411,7 @@ function _channelview_mouseposition!(wctx)
 end
 
 function _channelview_values(layout, yindex, wctx, theme)
+
   for index in 1:wctx[:nchannels]
     Label(
       layout[yindex, index],
@@ -446,7 +429,11 @@ function _channelview_values(layout, yindex, wctx, theme)
       fontsize = theme[:ticksize],
       tellwidth = false,
     )
-    value = lift(wctx[index][:mouse_value]) do val
+    # TODO: The update of value in the label causes a LOT of GC.
+    # Throttling helps, but this should probably be handled more efficiently
+    # in Makie?
+    mouse_value = Observables.throttle(0.25, wctx[index][:mouse_value]) 
+    value = lift(mouse_value) do val
       return isnan(val) ? "" : string(round(val))
     end
     Label(
@@ -475,8 +462,7 @@ function _channelview_zselector(layout, xindex, wctx, theme)
     sublayout[2, 1],
     lift(string, wctx[:zindex]);
     rotation = -90 / 180 * pi,
-    # color = :darkgray,
-    fontsize = theme[:fontsize],
+    fontsize = theme[:ticksize],
   )
   slider = Slider(
     sublayout[3, 1];
@@ -498,7 +484,7 @@ function _channelview_zselector(layout, xindex, wctx, theme)
   )
   on(slider.value) do zindex
     if wctx[:view][].zindex != zindex
-      wctx[:view][] = View2D(zindex, wctx[:variant][])
+      wctx[:view][] = View(zindex, wctx[:tindex][])
     end
   end
   on(down_button.clicks) do _

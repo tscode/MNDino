@@ -121,6 +121,7 @@ function runscript(
   image_store,
   variable_store,
   variables = [],
+  callback = (_, _) -> nothing,
 )
   ctx = initcontext(project)
   store = loadcontext(ctx, image_store)
@@ -139,9 +140,12 @@ function runscript(
 
   names = [:index; :path; variables; first.(script.outputs)]
   results = []
+  nentries = length(store[:entries][])
 
+  callback(0, nentries)
   notify(store[:select_first])
-  for _ in 1:length(store[:entries][])
+
+  for index in 1:nentries
     push!(results, store[:active_index][])
     push!(results, store[:entry][].path)
     for key in variables
@@ -152,6 +156,7 @@ function runscript(
     for (key, _) in script.outputs
       push!(results, outputs[key])
     end
+    callback(index, nentries)
     notify(store[:select_next])
   end
 
