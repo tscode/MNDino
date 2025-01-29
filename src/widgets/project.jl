@@ -115,6 +115,7 @@ function plotwidget(::ProjectWidget, layout, wctx, theme)
 
   on(save_button.clicks) do _
     if isempty(path[])
+      @warn "Saving aborted: No file selected"
       fadelabel(save_label, "No file selected", colorant"darkgray")
       return
     end
@@ -124,12 +125,14 @@ function plotwidget(::ProjectWidget, layout, wctx, theme)
       project = updateproject(wctx[:ctx][:project], wctx[:ctx])
       saveproject(project, path[])
       fadelabel(save_label, "Project saved", colorant"darkgreen")
+      @info "Project saved as $(path[])"
     catch err
-      @error err
       wctx[:path][] = ""
       if err isa Base.IOError
-        fadelabel(save_label, "Cannot write file", colorant"darkred")
+        @warn "Saving failed: Cannot write to file"
+        fadelabel(save_label, "Cannot write to file", colorant"darkred")
       else
+        @warn "Saving failed: $err"
         fadelabel(save_label, "Saving failed", colorant"darkred")
       end
     end

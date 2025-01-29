@@ -122,6 +122,22 @@ function initcontext(widget::ChannelViewMaskWidget, ctx)
   wctx[:segment_on] = Observable(false)
   wctx[:pen_size] = Observable(100)
 
+  on(wctx[:pointer_on]) do pointer
+    @info "Setting option :pointer_on in channel view widget to $pointer"
+  end
+  on(wctx[:mask_on]) do mask
+    @info "Setting option :mask_on in channel view widget to $mask"
+  end
+  on(wctx[:pen_on]) do pen
+    @info "Setting option :pen_on in channel view widget to $pen"
+  end
+  on(wctx[:segment_on]) do segment
+    @info "Setting option :segment_on in channel view widget to $segment"
+  end
+  on(wctx[:pen_size]) do size
+    @info "Setting option :pen_size in channel view widget to $size"
+  end
+
   # Internal resolution reduction for certain mask operations
   # and visualizations for a more fluid experience
   wctx[:downscaling] = Observable(2)

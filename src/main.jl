@@ -68,6 +68,7 @@ function runproject(project::Project; wait = false, size = (1200, 1000), dryrun 
     screen = Base.display(fig)
     if wait
       Base.wait(screen)
+      @info "MNDino is shutting down..."
     end
   end
 
@@ -189,13 +190,15 @@ function main(;
   dryrun = false,
   kwargs...,
 )
+  @info "Running MNDino main function"
   if show_welcome
+    @info "Running file selection..."
     project = welcome(; dryrun)
   else
     project = newproject(; dryrun, kwargs...)
   end
   if !isnothing(project)
-    @info "Running project..."
+    @info "Initializing project..."
     runproject(project; wait, size)
   else
     @info "Discarding project"

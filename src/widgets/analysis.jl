@@ -180,6 +180,7 @@ function _analysis_topline(layout, wctx, theme)
   on(live_toggle.active; update = true) do live
     wctx[:live][] = live
     notify(wctx[:evaluate])
+    @info "Setting option :live of analysis widget to $live"
     return
   end
 
@@ -198,29 +199,32 @@ function _analysis_topline(layout, wctx, theme)
   end
 
   on(export_button.clicks) do _
-    red = RGB(0.5, 0.2, 0.2)
-    green = RGB(0.2, 0.4, 0.2)
     @async begin
       if isnothing(wctx[:script][])
-        fadelabel(export_label, "no script loaded", colorant"darkred")
+        @warn "Export aborted: Missing script"
+        fadelabel(export_label, "No script loaded", colorant"darkred")
         return
       end
       path = NativeFileDialog.save_file(; filterlist = "csv")
       if path == ""
-        fadelabel(export_label, "export aborted", colorant"darkred")
+        @warn "Export aborted: No file selected"
+        fadelabel(export_label, "Export aborted", colorant"darkred")
         return
       end
       try
-        cb = (i, n) -> export_label.text[] = "exporting... ($i / $n)"
+        @info "Exporting analysis data to $path..."
+        cb = (i, n) -> export_label.text[] = "Exporting... ($i / $n)"
         task = Threads.@spawn wctx[:export](cb)
         names, data = fetch(task)
         open(path, "w") do io
           println(io, join(names, ","))
           return writedlm(io, data, ',')
         end
-        fadelabel(export_label, "export successful", colorant"darkgreen")
+        @info "Export finished"
+        fadelabel(export_label, "Export finished", colorant"darkgreen")
       catch err
-        fadelabel(export_label, "export failed", colorant"darkred")
+        @warn "Export failed"
+        fadelabel(export_label, "Export failed", colorant"darkred")
       end
     end
   end
