@@ -104,9 +104,10 @@ function initcontext(widget::AnalysisWidget, ctx)
 
 
   # Evaluate the script on the current input
+  # throttle: run script at most every 0.5 seconds
   # async_latest: prevent evaluation requests from potentially overflowing
-  on(Observables.async_latest(wctx[:evaluate])) do _
-    # on(wctx[:evaluate]) do _
+  evaluate_throttled = Observables.throttle(0.5, wctx[:evaluate])
+  on(Observables.async_latest(evaluate_throttled)) do _
     script = wctx[:script][]
     isnothing(script) && return
 
