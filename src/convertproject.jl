@@ -28,7 +28,7 @@ function convert_project_files(paths)
     end
     @info "Converting project..."
     obj = _emulate_v02(project)
-    path_old = path * ".old"
+    path_old = path * ".v1"
     @info "Moving $path to $path_old"
     Base.Filesystem.mv(path, path_old)
     @info "Saving v0.2 project file to $path"

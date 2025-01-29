@@ -41,7 +41,6 @@ Contains the fields `size` and `data`, the latter of which is usually a
 `Generator` after reconstruction via unpack.
 """
 struct ArrayValue{T}
-  datatype::Symbol
   size::NTuple{N, Int} where {N}
   data::T
 end
@@ -49,13 +48,12 @@ end
 format(::Type{<:ArrayValue}) = MapFormat()
 
 function valueformat(::Type{<:ArrayValue}, state, ::MapFormat)
-  return state == 3 ? VectorFormat() : DefaultFormat()
+  return state == 2 ? VectorFormat() : DefaultFormat()
 end
 
 function pack(io::IO, value, ::ArrayFormat, rules::Rules)::Nothing
   val = destruct(value, ArrayFormat(), rules)
-  datatype = Base.eltype(val) |> string |> Symbol
-  return pack(io, ArrayValue(datatype, size(val), val), rules)
+  return pack(io, ArrayValue(size(val), val), rules)
 end
 
 function unpack(io::IO, ::Type{T}, ::ArrayFormat, rules::Rules)::T where {T}
@@ -148,7 +146,6 @@ Contains the fields `size` and `data`, the latter of which is a `Vector{UInt8}`
 after reconstruction via unpack.
 """
 struct BinArrayValue{T}
-  datatype::Symbol  # Only metadata, not checked during construction of arrays
   size::NTuple{N, Int} where {N}
   data::T
 end
@@ -156,13 +153,12 @@ end
 format(::Type{<:BinArrayValue}) = MapFormat()
 
 function valueformat(::Type{<:BinArrayValue}, state, ::MapFormat)
-  return state == 3 ? BinaryFormat() : DefaultFormat()
+  return state == 2 ? BinaryFormat() : DefaultFormat()
 end
 
 function pack(io::IO, value, ::BinArrayFormat, rules::Rules)
   val = destruct(value, BinArrayFormat(), rules)
-  datatype = Base.eltype(val) |> string |> Symbol
-  pack(io, BinArrayValue(datatype, size(val), val), rules)
+  pack(io, BinArrayValue(size(val), val), rules)
   return
 end
 
