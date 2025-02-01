@@ -64,11 +64,16 @@ function DinoScript(path::String)
     error("Output declaration in script '$path' is malformed.")
   end
 
-  f = try
+  evaluate = try
     env.evaluate
   catch _
     error("Script '$path' does not define 'evaluate'.")
   end
+
+  # This is needed when within the same function a dinoscript file is loaded
+  # (then f has newer world age than the function loading the dinoscript) and i
+  # the evaluate function is called.
+  f = (args...) -> Base.invokelatest(evaluate, args...)
 
   return DinoScript(path, doc, inputs, outputs, f, env)
 end
@@ -123,7 +128,9 @@ function runscript(
   variables = [],
   callback = (_, _) -> nothing,
 )
+  @info "Export: Running Dinoscript on project..."
   ctx = initcontext(project)
+  @info "Export: Context initialized"
   store = loadcontext(ctx, image_store)
   vars = loadcontext(ctx, variable_store)
 
@@ -146,6 +153,7 @@ function runscript(
   notify(store[:select_first])
 
   for index in 1:nentries
+    @info "Export: Analyzing image $index..."
     push!(results, store[:active_index][])
     push!(results, store[:entry][].path)
     for key in variables
@@ -157,9 +165,11 @@ function runscript(
       push!(results, outputs[key])
     end
     callback(index, nentries)
+    @info "Export: Finished analysis of image $index"
     notify(store[:select_next])
   end
 
+  # Create a row vector
   result = permutedims(reshape(results, length(names), :))
   return names, result
 end

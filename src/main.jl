@@ -1,6 +1,7 @@
 
 using GLMakie
 using GLMakie.GLFW
+using Makie: project_point2
 
 function default_theme()
   return Dict(
@@ -84,7 +85,7 @@ function filterlist()
   return "*;dino;$images"
 end
 
-function welcome(; dryrun = false)
+function openproject(; dryrun = false)
   paths = NativeFileDialog.pick_multi_file(; filterlist = filterlist())
   if isempty(paths)
     @info "No files have been selected"
@@ -184,21 +185,21 @@ function newproject(;
 end
 
 function main(;
-  show_welcome = true,
+  pick_files = true,
   wait = true,
   size = (1200, 1000),
   dryrun = false,
   kwargs...,
 )
   @info "Running MNDino main function"
-  if show_welcome
-    @info "Running file selection..."
-    project = welcome(; dryrun)
+  if pick_files
+    @info "Opening project file selection..."
+    project = openproject(; dryrun)
   else
     project = newproject(; dryrun, kwargs...)
   end
   if !isnothing(project)
-    @info "Initializing project..."
+    @info "Initializing and running project..."
     runproject(project; wait, size)
   else
     @info "Discarding project"
@@ -399,6 +400,46 @@ function channelconfigurator(img::ImageFile)
         colors[index],
       )
     end
+  end
+end
+
+function export_analysis(project::Project, output::String; script = nothing)
+  if isnothing(script)
+    path = project.providers[:analysis].script_path
+    if isempty(path)
+      @info """
+      The given project has no associated script. \
+      Please select a valid script file.
+      """
+      path = NativeFileDialog.pick_file()
+      isempty(path) && error("No script file has been selected")
+    end
+    script = DinoScript(path)
+  end
+  names, data = runscript(
+    script,
+    project;
+    image_store = :images,
+    variable_store = :variables,
+    variables = [:zindex],
+  )
+  open(output, "w") do io
+    @info "Writing results to $output"
+    println(io, join(names, ","))
+    return writedlm(io, data, ',')
+  end
+end
+
+function export_analysis(; script = nothing)
+  @info "Select the project file to be analysed..."
+  path = NativeFileDialog.pick_file(; filterlist = "dino;*")
+  @info "Select analysis export file..."
+  output = NativeFileDialog.save_file(; filterlist = "csv")
+  if isnothing(path)
+    @info "No file selected."
+  else
+    project = loadproject(path)
+    export_analysis(project, output; script)
   end
 end
 

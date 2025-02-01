@@ -212,8 +212,16 @@ function _analysis_topline(layout, wctx, theme)
         return
       end
       try
+        # Update the export label whenever a new image is being processed
+        ch = Base.Channel{Tuple{Int, Int}}(10)
+        @async while true
+          (index, n) = take!(ch)
+          export_label.text[] = "Exporting image $index / $n"
+          index == n && break
+        end
+        # Run the script on each image and save the results
         @info "Exporting analysis data to $path..."
-        cb = (i, n) -> export_label.text[] = "Exporting... ($i / $n)"
+        cb = (i, n) -> put!(ch, (i, n))
         task = Threads.@spawn wctx[:export](cb)
         names, data = fetch(task)
         open(path, "w") do io
@@ -274,6 +282,7 @@ function _analysis_script(layout, wctx, theme)
   on(load_button.clicks) do _
     @async begin
       path = NativeFileDialog.pick_file()
+      @info "Trying to load script at $path"
       if !isempty(path)
         wctx[:script_path][] = path
       end
