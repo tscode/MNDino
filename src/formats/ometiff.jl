@@ -78,7 +78,7 @@ end
 """
 Structure that references a specific plane associated to a <TiffData> node.
 
-Each plance corresponds to a XY slice of the image. An instance of `Plane`
+Each plane corresponds to a XY slice of the image. An instance of `Plane`
 contains all necessary information (in particular the filename and ifd
 (1-based)) to access the corresponding slice data. It additionally stores the
 uuid of the file and the ZCT indices (1-based).
@@ -196,9 +196,13 @@ function resolve_path(fname, uuid, dir)
     Expected file at $path
     """
     if !isnothing(uuid)
-      @assert uuid == load_uuid(path) """
-      Given UUID $uuid does not match UUID $(load_uuid(path)) of the file $path.
-      """
+      # TODO: This check here is *very* costly if the disk is slow!
+      # I have to find another way to check the uuid for consistency.
+      # Probably by using an uuid-cache that stores the uuid of every file that has been looked at once.
+      #
+      # @assert uuid == load_uuid(path) """
+      # Given UUID $uuid does not match UUID $(load_uuid(path)) of the file $path.
+      # """
     end
     return path
   end
@@ -363,17 +367,22 @@ end
 Read the OME-XML of an OME-TIFF file with filename `fname` in the directory `dir`.
 """
 function parse_xml(xml, fname, dir)
-  nodes = extract_nodes(xml)
+  println("  EXTRACTING NODES:")
+  @time nodes = extract_nodes(xml)
   uuid = get(XML.attributes(nodes.ome), "UUID", nothing)
   @debug "OME-XML has UUID $uuid"
-  pixels = parse_pixels_node(nodes.pixels)
-  planes = mapreduce(vcat, nodes.tiffdata) do node
+  println("  PARSING PIXEL NODE:")
+  @time pixels = parse_pixels_node(nodes.pixels)
+  println("  DERIVING PLANES:")
+  @time planes = mapreduce(vcat, nodes.tiffdata) do node
     parse_tiffdata_node(node, pixels, fname, uuid)
   end
   planes = rearrange_planes(planes, pixels)
-  paths = collect_paths(planes, dir)
+  println("  COLLECTING PATHS:")
+  @time paths = collect_paths(planes, dir)
   @debug "Parsing channels"
-  channels = parse_channels(nodes.channels, pixels)
+  println("  PARSING CHANNELS:")
+  @time channels = parse_channels(nodes.channels, pixels)
   return (; uuid, pixels, planes, paths, channels)
 end
 
@@ -383,6 +392,7 @@ end
 Load the UUID of the OME file at `path`.
 """
 function load_uuid(path)
+  @debug "Loading OME-XML UUID of file $path"
   xml = load_xml(path, accept_partial = true)
   for node in xml
     if XML.tag(node) == "OME"
@@ -414,6 +424,7 @@ function load_xml(path; accept_partial = false)
       read(io, XML.LazyNode)
     end
   else
+    @debug "Loading TIFF file $path to access OME-XML"
     tiff = TiffImages.load(path; mmap = true, verbose = false)
     xml = extract_xml(tiff, Base.dirname(path); accept_partial)
   end
@@ -426,7 +437,7 @@ function extract_xml(tiff, dir; accept_partial = false)
   ifds = TiffImages.ifds(tiff)
   ifd = ifds isa TiffImages.IFD ? ifds : ifds[1]
   xmlstr = ifd[TiffImages.IMAGEDESCRIPTION].data
-  xml = XML.parse(XML.LazyNode, xmlstr)
+  xml = XML.parse(XML.LazyNode, String(xmlstr))
   if !accept_partial
     for node in xml
       if XML.tag(node) == "BinaryOnly"
@@ -458,19 +469,24 @@ struct OmeTiffFile <: ImageFile
 end
 
 function OmeTiffFile(path::String)
-  xml = load_xml(path)
-  meta = parse_xml(xml, Base.basename(path), Base.dirname(path))
+  println("LOADING XML:")
+  @time xml = load_xml(path)
+  println("PARSING XML:")
+  @time meta = parse_xml(xml, Base.basename(path), Base.dirname(path))
   sz = meta.pixels.size[1:2]
-  tiffs = map(collect(meta.paths)) do (uuid, path_tiff)
-    uuid_loaded = load_uuid(path_tiff)
+  println("LOADING TIFFS:")
+  @time tiffs = map(collect(meta.paths)) do (uuid, path_tiff)
+    println("  LOADING UUID")
+    @time uuid_loaded = load_uuid(path_tiff)
     @assert uuid == uuid_loaded """
     Expected UUID $uuid but found $uuid_loaded in file $path_tiff.
     """
-    tiff = TiffImages.load(path_tiff; mmap = true, verbose = false)
+    println("  MMAP LOADING TIFF")
+    @time tiff = TiffImages.load(path_tiff; mmap = true, verbose = false)
     @assert size(tiff)[1:2] == sz """
       Expected XY dimensions $sz but file $p has dimensions $(size(tiff)[1:2]).
     """
-    @debug "Loading TIFF file $p was successfull."
+    @debug "Loading TIFF file $path was successfull."
     uuid => tiff
   end
   tiffs = Dict(tiffs)
