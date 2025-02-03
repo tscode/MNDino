@@ -102,7 +102,7 @@ function initcontext(widget::ChannelViewMaskWidget, ctx)
       if haskey(shelf, next.id)
         wctx[index][:mask][] = shelf[next.id].masks[index]
       else
-        sz = planesize(next.image)
+        sz = planesize(imagefile(next))
         mask = Matrix{Bool}(undef, sz)
         mask .= false
         wctx[index][:mask][] = mask

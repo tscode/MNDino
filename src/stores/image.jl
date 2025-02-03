@@ -49,11 +49,11 @@ Image descriptor exposed by the ImageStore.
 struct ImageDescriptor
   id::Int
   path::String
-  image::ImageFile
+  image::Task
 end
 
 function ImageDescriptor(id, path::String)
-  return ImageDescriptor(id, path, loadimagefile(path))
+  return ImageDescriptor(id, path, Threads.@spawn(loadimagefile(path)))
 end
 
 function ImageDescriptor(id, image::ImageFile)
@@ -61,7 +61,7 @@ function ImageDescriptor(id, image::ImageFile)
 end
 
 function imagefile(entry::ImageDescriptor)
-  return entry.image
+  return fetch(entry.image)
 end
 
 function location(entry::ImageDescriptor)
@@ -264,24 +264,3 @@ function addshelf!(pctx, key, S)
   pctx[:shelfs][key] = get(pctx[:shelfs], key, Shelf{S}())
   return pctx[:shelfs][key]
 end
-
-# usage example of ImageStores:
-"""
-store = loadcontext(ctx, :store)
-shelf = addshelf!(store, :mystuff) # gets me a dictionary per image in store
-
-# Listen to changes of the active ImageDescriptor # and use my store
-# appropriately.
-# 
-# The store should not contain observables, but only quantities for which it
-# makes sense to store (and serialize / deserialize) them.
-
-# Here, the functions *_metadata have to return a Storable
-on(ctx[:store][:change]) do (next, prev)
-  shelf[prev.id] = update_metadata(pctx)
-  shelf[next.id] = haskey(self, next.id) ? load_metadata(pctx) : init_metadata(pctx)
-
-  # changes I have to do in order to handle changes of the image
-  pctx[:image] = loadimage(next.image)
-end
-"""

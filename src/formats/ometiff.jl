@@ -480,6 +480,7 @@ function OmeTiffFile(path::String)
     uuid => tiff
   end
   tiffs = Dict(tiffs)
+  sleep(3)
 
   return OmeTiffFile(path, meta.pixels, meta.channels, meta.planes, tiffs)
 end
