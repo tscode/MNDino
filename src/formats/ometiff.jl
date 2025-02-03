@@ -139,7 +139,7 @@ function parse_tiffdata_node(node, pixels, fname, uuid)
     parse(Int, get(attribs, "FirstC", "0")),
     parse(Int, get(attribs, "FirstT", "0")),
   ) .+ 1
-  @debug "Found first zct index $first_zct ($(first_zct - 1) in 0-based indexing)"
+  @debug "Found first zct index $first_zct ($(first_zct .- 1) in 0-based indexing)"
 
   # The planecount proceeds linearly from first_zct on, but
   # in the order described by pixels.order
