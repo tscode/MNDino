@@ -127,7 +127,15 @@ function imagedata(
     img.hdf5["DataSet/ResolutionLevel $resolution/TimePoint $(tindex - 1)"]
   data = data_group["Channel $(cindex - 1)/Data"]
 
-  return data[:, :, zindex]
+  slice = data[:, :, zindex]
+  # It is crucial for other parts of the program that planesize predicts the
+  # right plane size
+  @assert size(slice) == planesize(img) """
+  Inconsistent plane dimensions: <Pixels> node says $(planesize(img)),\
+  but actual tiff data says $(size(slice)).
+  """
+
+  return slice
 end
 
 registerformat!(ImarisFile)

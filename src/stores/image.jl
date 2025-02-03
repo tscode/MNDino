@@ -223,7 +223,8 @@ function initcontext(store::ImageStore, ctx)
     pctx[:change_from][] = prev
     pctx[:entry][] = next
     pctx[:change_to][] = next
-    return pctx[:change][] = (next, prev)
+    pctx[:change][] = (next, prev)
+    return
   end
 
   on(pctx[:entries]) do entries

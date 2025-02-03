@@ -28,8 +28,8 @@ function initcontext(widget::SegmentsWidget, ctx)
     wctx[:masks][index][:color] = mpctx[index][:color]
     wctx[:masks][index][:name] = mpctx[index][:name]
     if index == 1
-      on(mpctx[index][:size]) do sz
-        wctx[:size][] = sz
+      on(mpctx[index][:mask]) do mask
+        wctx[:size][] = size(mask)
       end
     end
   end

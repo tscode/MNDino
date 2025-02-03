@@ -367,22 +367,17 @@ end
 Read the OME-XML of an OME-TIFF file with filename `fname` in the directory `dir`.
 """
 function parse_xml(xml, fname, dir)
-  println("  EXTRACTING NODES:")
-  @time nodes = extract_nodes(xml)
+  nodes = extract_nodes(xml)
   uuid = get(XML.attributes(nodes.ome), "UUID", nothing)
   @debug "OME-XML has UUID $uuid"
-  println("  PARSING PIXEL NODE:")
-  @time pixels = parse_pixels_node(nodes.pixels)
-  println("  DERIVING PLANES:")
-  @time planes = mapreduce(vcat, nodes.tiffdata) do node
+  pixels = parse_pixels_node(nodes.pixels)
+  planes = mapreduce(vcat, nodes.tiffdata) do node
     parse_tiffdata_node(node, pixels, fname, uuid)
   end
   planes = rearrange_planes(planes, pixels)
-  println("  COLLECTING PATHS:")
-  @time paths = collect_paths(planes, dir)
+  paths = collect_paths(planes, dir)
   @debug "Parsing channels"
-  println("  PARSING CHANNELS:")
-  @time channels = parse_channels(nodes.channels, pixels)
+  channels = parse_channels(nodes.channels, pixels)
   return (; uuid, pixels, planes, paths, channels)
 end
 
@@ -469,20 +464,15 @@ struct OmeTiffFile <: ImageFile
 end
 
 function OmeTiffFile(path::String)
-  println("LOADING XML:")
-  @time xml = load_xml(path)
-  println("PARSING XML:")
-  @time meta = parse_xml(xml, Base.basename(path), Base.dirname(path))
+  xml = load_xml(path)
+  meta = parse_xml(xml, Base.basename(path), Base.dirname(path))
   sz = meta.pixels.size[1:2]
-  println("LOADING TIFFS:")
-  @time tiffs = map(collect(meta.paths)) do (uuid, path_tiff)
-    println("  LOADING UUID")
-    @time uuid_loaded = load_uuid(path_tiff)
+  tiffs = map(collect(meta.paths)) do (uuid, path_tiff)
+    uuid_loaded = load_uuid(path_tiff)
     @assert uuid == uuid_loaded """
     Expected UUID $uuid but found $uuid_loaded in file $path_tiff.
     """
-    println("  MMAP LOADING TIFF")
-    @time tiff = TiffImages.load(path_tiff; mmap = true, verbose = false)
+    tiff = TiffImages.load(path_tiff; mmap = true, verbose = false)
     @assert size(tiff)[1:2] == sz """
       Expected XY dimensions $sz but file $p has dimensions $(size(tiff)[1:2]).
     """
@@ -531,6 +521,13 @@ function imagedata(img::OmeTiffFile, zindex, cindex, tindex)
   plane = img.planes[zindex, cindex, tindex]
   tiff = ImageCore.channelview(img.tiffs[plane.uuid])
   slice = @view tiff[:, :, plane.ifd]
+
+  # It is crucial for other parts of the program that planesize predicts the
+  # right plane size
+  @assert size(slice) == planesize(img) """
+  Inconsistent plane dimensions: <Pixels> node says $(planesize(img)),\
+  but actual tiff data says $(size(slice)).
+  """
   return reinterpret.(slice) # remove Normed FixedPointNumber
 end
 

@@ -37,7 +37,7 @@ variantdefault(::CommonImageFile) = (;)
 zindexdefault(img::CommonImageFile) = 1
 tindexdefault(img::CommonImageFile) = 1
 
-planesize(img::CommonImageFile) = size(img.data, 1:2)
+planesize(img::CommonImageFile) = size(img.data)[1:2]
 nzlayers(img::CommonImageFile) = size(img.data, 3)
 ntlayers(img::CommonImageFile) = size(img.data, 4)
 nchannels(::CommonImageFile{C}) where {C} = length(C)
@@ -112,6 +112,12 @@ function imagedata(img::CommonImageFile, zindex, cindex, tindex)
   """
   data = ImageCore.channelview(img.data)
   slice = @view data[cindex, :, :, zindex, tindex]
+
+  @assert size(slice) == planesize(img) """
+  Inconsistent plane dimensions: <Pixels> node says $(planesize(img)),\
+  but actual tiff data says $(size(slice)).
+  """
+
   return slice
 end
 

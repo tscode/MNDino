@@ -71,13 +71,11 @@ function initcontext(widget::ChannelViewMaskWidget, ctx)
     wctx[index] = Dict{Symbol, Any}()
     wctx[index][:data] = cctx[index][:data]
     wctx[index][:axis] = cctx[index][:axis]
-    wctx[index][:size] = cctx[index][:size]
     wctx[index][:color] = cctx[index][:color]
     wctx[index][:crange] = cctx[index][:crange]
     wctx[index][:name] = cctx[index][:name]
 
-    # TODO: implement and handle resize events, e.g., when we want to change resolution globally
-    mask = Matrix{Bool}(undef, cctx[index][:size][])
+    mask = Matrix{Bool}(undef, size(cctx[index][:data][]))
     mask .= false
     wctx[index][:mask] = Observable(mask)
 
@@ -88,7 +86,7 @@ function initcontext(widget::ChannelViewMaskWidget, ctx)
   wctx[:focused] = cctx[:focused]
 
   update_store = prev -> begin
-    if isnothing(prev) # :update instead of :change_from
+    if isnothing(prev) # :update is triggered instead of :change_from
       prev = store[:entry][]
     end
     if !haskey(shelf, prev.id)
@@ -104,7 +102,7 @@ function initcontext(widget::ChannelViewMaskWidget, ctx)
       if haskey(shelf, next.id)
         wctx[index][:mask][] = shelf[next.id].masks[index]
       else
-        sz = wctx[index][:size][]
+        sz = planesize(next.image)
         mask = Matrix{Bool}(undef, sz)
         mask .= false
         wctx[index][:mask][] = mask
