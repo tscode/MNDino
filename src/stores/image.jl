@@ -56,9 +56,9 @@ function ImageDescriptor(id, path::String)
   return ImageDescriptor(id, path, Threads.@spawn(loadimagefile(path)))
 end
 
-function ImageDescriptor(id, image::ImageFile)
-  return ImageDescriptor(id, location(image), image)
-end
+# function ImageDescriptor(id, image::ImageFile)
+#   return ImageDescriptor(id, location(image), image)
+# end
 
 function imagefile(entry::ImageDescriptor)
   return fetch(entry.image)

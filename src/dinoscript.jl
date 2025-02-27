@@ -155,7 +155,7 @@ function runscript(
   for index in 1:nentries
     @info "Export: Analyzing image $index..."
     push!(results, store[:active_index][])
-    push!(results, store[:entry][].path)
+    push!(results, location(store[:entry][]))
     for key in variables
       push!(results, vars[key][])
     end
