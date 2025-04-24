@@ -77,12 +77,8 @@ function runproject(project::Project; wait = false, size = (1200, 1000), dryrun 
 end
 
 function filterlist()
-  images = map([ImarisFile, CommonImageFile, OmeTiffFile]) do F
-    exts = map(ext -> ext[2:end], extensions(F))
-    return join(exts, ",")
-  end
-  images = join(images, ";")
-  return "*;dino;$images"
+  imgexts = extensionstring(grouped = true)
+  return "*;dino;$imgexts"
 end
 
 function openproject(; dryrun = false)

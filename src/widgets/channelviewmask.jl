@@ -85,34 +85,46 @@ function initcontext(widget::ChannelViewMaskWidget, ctx)
   wctx[:mouse_position] = cctx[:mouse_position]
   wctx[:focused] = cctx[:focused]
 
-  update_store = prev -> begin
-    if isnothing(prev) # :update is triggered instead of :change_from
-      prev = store[:entry][]
-    end
-    if !haskey(shelf, prev.id)
-      shelf[prev.id] = MaskData()
+  on(store[:update]) do _
+    entry = store[:entry][]
+    if !haskey(shelf, entry.id)
+      shelf[entry.id] = MaskData()
     end
     for index in 1:wctx[:nchannels]
-      shelf[prev.id].masks[index] = copy(wctx[index][:mask][])
+      shelf[entry.id].masks[index] = copy(wctx[index][:mask][])
     end
   end
 
-  load_next = next -> begin
+  on(store[:change], update = true) do (next, prev)
+    # If next is nothing, assume that prev was deleted
+    if isnothing(next)
+      for index in 1:wctx[:nchannels]
+        wctx[index][:mask][] = fill(false, 1, 1)
+      end
+      return
+    end
+
+    if !isnothing(prev)
+      # this means that there was a prev entry whose mask should be saved
+      if !haskey(shelf, prev.id)
+        # it is the first time we save it
+        shelf[prev.id] = MaskData()
+      end
+      for index in 1:wctx[:nchannels]
+        shelf[prev.id].masks[index] = copy(wctx[index][:mask][])
+      end
+    end
+
+    # Finally, load the next mask
     for index in 1:wctx[:nchannels]
       if haskey(shelf, next.id)
         wctx[index][:mask][] = shelf[next.id].masks[index]
       else
         sz = planesize(imagefile(next))
-        mask = Matrix{Bool}(undef, sz)
-        mask .= false
-        wctx[index][:mask][] = mask
+        wctx[index][:mask][] = fill(false, sz)
       end
     end
   end
-
-  on(update_store, store[:update])
-  on(update_store, store[:change_from])
-  on(load_next, store[:change_to]; update = true)
 
   wctx[:pointer_on] = Observable(true)
   wctx[:mask_on] = Observable(true)
@@ -177,8 +189,12 @@ function _mask_interaction!(wctx)
 
     onany(mask, wctx[:mask_on]) do data, visible
       if visible
-        ImageTransformations.imresize!(mask_scaled[], data)
-        notify(mask_scaled)
+        if all(si -> si > 1, size(data))
+          ImageTransformations.imresize!(mask_scaled[], data)
+          notify(mask_scaled)
+        else
+          mask_scaled[] = copy(data)
+        end
       end
     end
 

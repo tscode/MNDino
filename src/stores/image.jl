@@ -42,6 +42,7 @@ Base.setindex!(s::Shelf, args...) = Base.setindex!(s.dict, args...)
 Base.get(s::Shelf, args...) = Base.get(s.dict, args...)
 Base.get(f::Function, s::Shelf, args...) = Base.get(f, s.dict, args...)
 Base.haskey(s::Shelf, args...) = Base.haskey(s.dict, args...)
+Base.delete!(s::Shelf, args...) = Base.delete!(s.dict, args...)
 
 """
 Image descriptor exposed by the ImageStore.
@@ -99,9 +100,13 @@ end
 function initcontext(store::ImageStore, ctx)
   pctx = Dict{Union{Symbol, Int}, Any}()
 
-  # Changing this observable will change the images of the store.
+  # public (set, get): Changing this observable will change the images of the store.
   pctx[:entries] = Observable(ImageDescriptor.(store.ids, store.paths))
+
+  # public (get): The ids of the image of the store
   pctx[:ids] = lift(entries -> getfield.(entries, :id), pctx[:entries])
+
+  # public (get): The paths of the image of the store
   pctx[:paths] = lift(entries -> location.(entries), pctx[:entries])
 
   # private: for interal purposes
@@ -126,6 +131,12 @@ function initcontext(store::ImageStore, ctx)
 
   # public (get): The index of the active entry. Can be -1 if nothing is selected
   pctx[:active_index] = Observable(-1)
+
+  # public (get): The last index of the store
+  pctx[:last_index] = lift(length, pctx[:entries])
+
+  # public (get): Whether the image store is currently loading or has finished
+  pctx[:loading] = Observable(false)
 
   # private: Used to cleanly create entry changes. For internal purposes only.
   pctx[:activate_id] = Observable(-1)
@@ -169,21 +180,34 @@ function initcontext(store::ImageStore, ctx)
     if index == pctx[:active_index][]
       return
     elseif index == -1 # deselect
+      pctx[:loading][] = true
       pctx[:activate_id][] = -1 # update pctx[:entry] and related observables
       pctx[:active_id][] = -1
       pctx[:active_index][] = -1
+      pctx[:loading][] = false
     elseif 1 <= index <= length(pctx[:entries][])
+      pctx[:loading][] = true
       entry = pctx[:entries][][index]
       pctx[:activate_id][] = entry.id # update pctx[:entry] and related observables
       pctx[:active_id][] = entry.id
       pctx[:active_index][] = index
+      pctx[:loading][] = false
     end
   end
 
   # public (get)
   # Listen to this to get notified of changes in the entry.
-  # Happens BEFORE pctx[:change], pctx[:change_to], but AFTER pctx[:change_from]
+  # Happens AFTER pctx[:change]
   pctx[:entry] = Observable{Union{Nothing, ImageDescriptor}}(nothing)
+
+  # public (get)
+  # Listen to this to get notified of change events in the entry
+  # This gets updated BEFORE pctx[:entry]
+  pctx[:change] = Observable{Tuple}((nothing, nothing))
+
+  # public (get, set)
+  # Listen or notify on this observable to handle or send store-update queries
+  pctx[:update] = Observable(nothing)
 
   # public (get)
   # Observable pointing to the current image. Updated when pctx[:entry] is
@@ -195,18 +219,11 @@ function initcontext(store::ImageStore, ctx)
     if !isnothing(entry)
       pctx[:image][] = imagefile(entry)
       pctx[:path][] = location(entry)
+    else
+      pctx[:image][] = nothing
+      pctx[:path][] = nothing
     end
   end
-
-  # public (get)
-  # Listen to this to get notified of change events in the entry
-  pctx[:change] = Observable{Tuple}((nothing, nothing))
-  pctx[:change_from] = Observable{Union{Nothing, ImageDescriptor}}(nothing)
-  pctx[:change_to] = Observable{Union{Nothing, ImageDescriptor}}(nothing)
-
-  # public (get, set)
-  # Listen or notify on this observable to handle or send store-update queries
-  pctx[:update] = Observable(nothing)
 
   # Trigger update if a global context update is triggered
   on(_ -> notify(pctx[:update]), ctx[:update])
@@ -220,10 +237,9 @@ function initcontext(store::ImageStore, ctx)
     prev = isnothing(index) ? nothing : entries[index]
 
     pctx[:recent_id][] = id
-    pctx[:change_from][] = prev
-    pctx[:entry][] = next
-    pctx[:change_to][] = next
     pctx[:change][] = (next, prev)
+    pctx[:entry][] = next
+
     return
   end
 
@@ -263,4 +279,55 @@ function addshelf!(pctx, key, S)
   # Shelf could already exist from loading a populated store
   pctx[:shelfs][key] = get(pctx[:shelfs], key, Shelf{S}())
   return pctx[:shelfs][key]
+end
+
+"""
+    addimages!(pctx, paths)
+
+Add images from `paths` to the image store with provider context `pctx`.
+"""
+function addimages!(pctx, paths)
+  idmax = maximum(pctx[:ids][], init = 1)
+  new_paths = filter(paths) do path
+    !(path in pctx[:paths][])
+  end
+  new_entries = map(enumerate(new_paths)) do (index, path)
+    ImageDescriptor(idmax + index, path)
+  end
+  append!(pctx[:entries][], new_entries)
+  notify(pctx[:entries])
+  return
+end
+
+"""
+    rmimages!(pctx, paths)
+
+Remove the images at `paths` from the image store with provider context `pctx`.
+"""
+function rmimages!(pctx, paths)
+  diff = setdiff(paths, pctx[:paths][])
+  if !isempty(diff)
+    @error """
+    Cannot remove images that are not part of the image store: $diff.
+    """
+  end
+  ids = map(paths) do path
+    index = findfirst(entry -> entry.path == path, pctx[:entries][])
+    pctx[:entries][][index].id
+  end
+
+  # Purge shelfs
+  for key in keys(pctx[:shelfs])
+    shelf = pctx[:shelfs][key]
+    foreach(id -> delete!(shelf, id), ids)
+  end
+
+  # Purge entries and notify the change
+  todelete = map(pctx[:entries][]) do entry
+    entry.id in ids
+  end
+  deleteat!(pctx[:entries][], todelete)
+  notify(pctx[:entries])
+
+  return
 end

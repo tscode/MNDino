@@ -22,6 +22,7 @@ function initcontext(widget::AnalysisWidget, ctx)
   loadentries!(wctx, widget, [:script_path]; obs = true)
 
   vars = loadcontext(ctx, wctx[:variable_store])
+  store = loadcontext(ctx, wctx[:image_store])
 
   wctx[:script] = Observable{Union{DinoScript, Nothing}}(nothing)
   wctx[:outputs] = Observable{Union{Dict, Nothing}}(nothing)
@@ -32,6 +33,17 @@ function initcontext(widget::AnalysisWidget, ctx)
 
   # Whether each change should automatically trigger an evaluation
   wctx[:live] = Observable(true)
+
+  # This condition is triggered whenever the image store has finished loading
+  # an image
+  wctx[:loading] = store[:loading]
+  loading_finished = Condition()
+
+  on(wctx[:loading]) do loading
+    if !loading
+      notify(loading_finished)
+    end
+  end
 
   # Store the export function that requires access to the global context
   wctx[:export] =
@@ -103,7 +115,6 @@ function initcontext(widget::AnalysisWidget, ctx)
     return
   end
 
-
   # Evaluate the script on the current input
   # throttle: run script at most every 0.5 seconds
   # async_latest: prevent evaluation requests from potentially overflowing
@@ -112,8 +123,14 @@ function initcontext(widget::AnalysisWidget, ctx)
     script = wctx[:script][]
     isnothing(script) && return
 
-    args = Dict(key => input[] for (key, input) in inputs)
+    # If evaluate is called during a change of images, wait until it is
+    # complete
+    !wctx[:loading][] || wait(loading_finished)
+
+    # Collect all arguments and run the script in a separate thread
+    args = Dict(key => copy(input[]) for (key, input) in inputs)
     task = Threads.@spawn script(args)
+
     try
       wctx[:outputs][] = fetch(task)
     catch err
@@ -161,7 +178,7 @@ function _analysis_topline(layout, wctx, theme)
   export_label = Label(layout[1, 2], ""; fontsize = theme[:fontsize])
   Label(layout[1, 3], "Auto update"; fontsize = theme[:fontsize])
   live_toggle =
-    Toggle(layout[1, 4]; height = 20, width = 40, active = wctx[:live][])
+    Toggle(layout[1, 4]; height = 20, active = wctx[:live][])
 
   update_button =
     Button(layout[1, 5]; label = "Update", fontsize = theme[:fontsize])

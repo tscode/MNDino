@@ -77,8 +77,12 @@ function _segments_showsegments(layout, wctx, theme)
     end
 
     on(mask) do data
-      ImageTransformations.imresize!(mask_scaled[], data)
-      notify(mask_scaled)
+      if all(si -> si > 1, size(data))
+        ImageTransformations.imresize!(mask_scaled[], data)
+        notify(mask_scaled)
+      else
+        mask_scaled[] = copy(data)
+      end
     end
 
     Makie.image!(

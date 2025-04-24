@@ -344,11 +344,35 @@ function registerformat!(::Type{I}) where {I <: ImageFile}
   return
 end
 
+"""
+    fitsextension(path, I) 
+
+Check if the extension of `path` fits the image file type `I <: ImageFile`.
+"""
 function fitsextension(path, I::Type{<:ImageFile})
   return any(extensions(I)) do ext
     re = Regex(ext * "\$")
     return !isnothing(match(re, path))
   end
+end
+
+"""
+    extensionstring([formats]; grouped = true)
+
+Get a comma-separated string of all image extensions of the image file formats
+in the iterable `formats` (defaults to all formats).
+
+If `grouped = true`, semicolons separate different image file formats.
+"""
+function extensionstring(
+  formats = unique(values(IMAGE_FORMATS));
+  grouped = true,
+)
+  exts = map(formats) do I
+    exts = map(ext -> ext[2:end], extensions(I))
+    join(exts, ",")
+  end
+  return join(exts, grouped ? ";" : ",")
 end
 
 """

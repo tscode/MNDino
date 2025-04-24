@@ -47,11 +47,15 @@ function initcontext(widget::ChannelViewWidget, ctx)
   loadentries!(wctx, store, [:entry, :image])
   shelf = addshelf!(store, :channelview, View)
 
-  wctx[:nzlayers] = lift(nzlayers, wctx[:image])
+  wctx[:nzlayers] = lift(wctx[:image]) do img
+    isnothing(img) ? 1 : nzlayers(img)
+  end
 
-  wctx[:view] = Observable(get(shelf, wctx[:entry][].id) do
-    return _viewdefault(wctx[:image][])
-  end)
+  wctx[:view] = Observable(View(1, 1))
+  if !isnothing(wctx[:image][])
+    wctx[:view][] = _viewdefault(wctx[:image][])
+  end
+
   wctx[:zindex] = lift(getvalue(:zindex), wctx[:view])
   wctx[:tindex] = lift(getvalue(:tindex), wctx[:view])
 
@@ -64,7 +68,11 @@ function initcontext(widget::ChannelViewWidget, ctx)
 
   # Automatically derive channels from first image if not provided
   if isempty(wctx[:channels])
-    wctx[:channels] = channels(wctx[:image][])
+    @assert !isempty(store[:entries][]) """
+    Cannot initialize channel view context: No channel information provided. 
+    """
+    img = imagefile(first(store[:entries][]))
+    wctx[:channels] = channels(img)
   end
   wctx[:nchannels] = length(wctx[:channels])
 
@@ -78,7 +86,10 @@ function initcontext(widget::ChannelViewWidget, ctx)
     data = lift(wctx[:view]) do view
       img = wctx[:image][]
       variant = (;) # TODO: The variant will eventually come from the selection widget?
-      if c.cindex > nchannels(img)
+      if isnothing(img)
+        # dummy data if no image is selected
+        return fill(NaN32, 1, 1)
+      elseif c.cindex > nchannels(img)
         return zeros(Float32, planesize(img; variant...))
       else
         return Float32.(
@@ -111,21 +122,34 @@ function initcontext(widget::ChannelViewWidget, ctx)
   end
 
   # React if the selected image changes
-  # TODO: Handle the situation where entries are nothing!
-  on(store[:change]) do (next, prev)
-    shelf[prev.id] = View(wctx[:zindex][], wctx[:tindex][])
-    wctx[:view][] = get(shelf, next.id) do
-      return _viewdefault(imagefile(next))
+  # on(store[:change]) do (next, prev)
+  # end
+
+  on(store[:change]) do (_, prev)
+    if !isnothing(prev)
+      shelf[prev.id] = View(wctx[:zindex][], wctx[:tindex][])
+    end
+  end
+
+  on(store[:entry]) do next
+    if !isnothing(next)
+      wctx[:view][] = get(shelf, next.id) do
+        return _viewdefault(imagefile(next))
+      end
+    else
+      wctx[:view][] = View(1, 1)
     end
   end
 
   on(store[:update]) do _
     entry = store[:entry][]
-    return shelf[entry.id] = View(wctx[:zindex][], wctx[:tindex][])
+    if !isnothing(entry)
+      shelf[entry.id] = View(wctx[:zindex][], wctx[:tindex][])
+    end
   end
 
   on(wctx[:image]) do img
-    if nchannels(img) != wctx[:nchannels]
+    if !isnothing(img) && nchannels(img) != wctx[:nchannels]
       @error """
       The number of channels changed when an image was selected.
       The channel view widget currently cannot handle this.
@@ -148,9 +172,12 @@ function _value_at(data, pos)
 end
 
 function _channelview_filename(layout, yindex, wctx, theme)
+  name = lift(wctx[:entry]) do entry
+    isnothing(entry) ? "no image selected" : basename(entry.path)
+  end
   Label(
     layout[yindex, :],
-    lift(basename, wctx[:entry]);
+    name;
     fontsize = theme[:fontsize],
     color = (:black, 0.7),
     halign = :left,
@@ -190,7 +217,7 @@ function _channelview_topline(layout, yindex, wctx, theme)
     tellwidth = false,
   )
 
-  filter_toggle = Toggle(layout[1, 5]; height = 20, width = 40)
+  filter_toggle = Toggle(layout[1, 5]; height = 20)
   filter_indicator = Label(
     layout[1, 6],
     "";
@@ -210,8 +237,9 @@ function _channelview_topline(layout, yindex, wctx, theme)
 
   on(reset_button.clicks) do _
     notify(wctx[:reset_clipping])
-    view = _viewdefault(wctx[:image][])
-    wctx[:view][] = view
+    if !isnothing(wctx[:image][])
+      wctx[:view][] = _viewdefault(wctx[:image][])
+    end
     set_close_to!(filter_slider, 1)
     return filter_toggle.active[] = false
   end
@@ -300,22 +328,40 @@ function _channelview_histograms(layout, yindex, wctx, theme)
 
   axes = map(1:nchannels) do index
     limits = lift(wctx[index][:extrema]) do minmax
-      if minmax[1] == minmax[2] # prevent degenerate axis limits
+      if any(isnan, minmax)
+        minmax = (0f0, 1f0)
+      elseif minmax[1] == minmax[2] # prevent degenerate axis limits
         minmax = (minmax[1] - 1.0f-5, minmax[2] + 1.0f-5)
       end
       return (minmax, (0, nothing))
     end
+
+    color = lift(wctx[index][:data]) do data
+      any(isnan, data) ? (:transparent) : (:black)
+    end
+
     values = lift(wctx[index][:data]) do data
-      return reshape(data, :)
+      any(isnan, data) ? Float32[0, 1] : reshape(data, :)
     end
 
     ax = Axis(layout[yindex, index]; limits)
+
+    onany(wctx[index][:data]) do _
+      return reset_limits!(ax)
+    end
+
     deregister_interaction!(ax, :rectanglezoom)
     deregister_interaction!(ax, :scrollzoom)
     deregister_interaction!(ax, :dragpan)
     hidedecorations!(ax)
     hidespines!(ax, :t, :l, :r)
-    hist!(ax, values; bins = 128, color = :black)
+
+    hist!(
+      ax,
+      values;
+      bins = 128,
+      color,
+    )
     vlines!(
       ax,
       lift(collect, wctx[index][:crange]);
@@ -329,9 +375,7 @@ function _channelview_histograms(layout, yindex, wctx, theme)
       color = lift(c -> 0.6c, wctx[index][:color]),
       alpha = 0.75,
     )
-    onany(wctx[index][:data]) do _
-      return reset_limits!(ax)
-    end
+
     return ax
   end
 
