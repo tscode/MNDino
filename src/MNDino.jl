@@ -118,8 +118,10 @@ include("widgets/channelviewmask.jl")
 include("widgets/segments.jl")
 include("widgets/analysis.jl")
 
-# Entry point to the GUI
-include("main.jl")
+# Entry point to the main GUI
+include("main/channelconfig.jl")
+include("main/export.jl")
+include("main/main.jl")
 
 # Precompilation statements to reduce startup time
 include("precompile.jl")

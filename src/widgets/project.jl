@@ -48,7 +48,7 @@ function plotwidget(::ProjectWidget, layout, wctx, theme)
 
   save_label = Label(
     toplayout[1, 3],
-    "";
+    " ";
     halign = :right,
     fontsize = theme[:fontsize],
     tellwidth = false,

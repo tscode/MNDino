@@ -175,7 +175,7 @@ function _analysis_topline(layout, wctx, theme)
     fontsize = theme[:titlesize],
   )
 
-  export_label = Label(layout[1, 2], ""; fontsize = theme[:fontsize])
+  export_label = Label(layout[1, 2], " "; fontsize = theme[:fontsize])
   Label(layout[1, 3], "Auto update"; fontsize = theme[:fontsize])
   live_toggle =
     Toggle(layout[1, 4]; height = 20, active = wctx[:live][])
@@ -269,7 +269,7 @@ function _analysis_script(layout, wctx, theme)
 
   msg_label = Label(
     layout[1, 2],
-    "";
+    " ";
     color = RGB(0.5, 0.2, 0.2),
     tellwidth = false,
     fontsize = theme[:fontsize],

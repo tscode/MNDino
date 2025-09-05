@@ -152,6 +152,9 @@ function runscript(
   callback(0, nentries)
   notify(store[:select_first])
 
+  # TODO: This can take very long if many images are loaded and their access
+  # latency is high. To improve the situation, we could walk over several
+  # independently generated contexts to query the relevant data in parallel?
   for index in 1:nentries
     @info "Export: Analyzing image $index..."
     push!(results, store[:active_index][])

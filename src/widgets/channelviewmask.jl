@@ -35,7 +35,6 @@ function ChannelViewMaskWidget(
   )
 end
 
-# TODO: Support mask channels that are independent from image channels
 function initcontext(widget::ChannelViewMaskWidget, ctx)
   wctx = Dict{Union{Int, Symbol}, Any}()
 
@@ -59,30 +58,89 @@ function initcontext(widget::ChannelViewMaskWidget, ctx)
   # Derive entries from the parent channel view
   cctx = loadcontext(ctx, wctx[:parent])
 
-  # TODO: Actually use mask_channels
+  # TODO: this should be removed.
+  # Mask channels should always be constructed properly before initiating
+  # the context.
   if isempty(wctx[:mask_channels])
     wctx[:mask_channels] = cctx[:channels]
   end
 
   wctx[:nchannels] = cctx[:nchannels]
-  wctx[:nmasks] = cctx[:nchannels]
-  
-  for index in 1:wctx[:nchannels]
-    wctx[index] = Dict{Symbol, Any}()
-    wctx[index][:data] = cctx[index][:data]
-    wctx[index][:axis] = cctx[index][:axis]
-    wctx[index][:color] = cctx[index][:color]
-    wctx[index][:crange] = cctx[index][:crange]
-    wctx[index][:name] = cctx[index][:name]
+  wctx[:nmasks] = length(wctx[:mask_channels])
 
-    mask = Matrix{Bool}(undef, size(cctx[index][:data][]))
-    mask .= false
-    wctx[index][:mask] = Observable(mask)
+  # This is a bit hacky, but in order not to make the storage format
+  # incompatible, we need to save the link between image channels and their
+  # (primary) masks without adding fields to the image store and the
+  # ChannelViewMask struct.
+  # We solve this by using the cindex of mask channels to refer to the
+  # actual image channel number (not the channel index!) which the mask is
+  # linked to.
+  # If we would not do this, the user would have to re-establish these links
+  # on each project load.
+  # The linking can be adapted via the new link tool.
 
-    addvariable!(vars, "S$index", wctx[index][:mask])
+  # TODO: With this hack, we have problems if there is not a one-on-one relation
+  # between axes and masks!
+
+  wctx[:channels] = map(1:wctx[:nchannels]) do index
+    mask_index = findfirst(wctx[:mask_channels]) do c
+      c.cindex == index
+    end
+    Dict{Symbol, Any}(
+      :axis => cctx[index][:axis],
+      :data => cctx[index][:data],
+      :crange => cctx[index][:crange],
+      :mask_index => Observable{Any}(mask_index),
+    )
   end
 
+  mask_indices = map(d -> d[:mask_index], wctx[:channels])
+
+  wctx[:masks] = map(1:wctx[:nmasks]) do mask_index
+    cindex = lift(mask_indices...) do mask_indices
+      index = findfirst(isequal(mask_index), mask_indices)
+      isnothing(index) ? -1 : index
+    end
+    
+    name = Observable(wctx[:mask_channels][mask_index].name)
+    color = Observable(wctx[:mask_channels][mask_index].color)
+
+    onany(cindex, name, color) do cindex, name, color
+      wctx[:mask_channels][mask_index] = Channel(cindex, name, color)
+    end
+
+    # TODO: Right way to get current planesize ?
+    sz = planesize(imagefile(store[:entry][]))
+    data = Observable(fill(false, sz))
+    addvariable!(vars, "S$mask_index", data)
+    
+    Dict{Symbol, Any}(
+      :cindex => cindex,
+      :name => name,
+      :color => color,
+      :data => data,
+    )
+  end
+
+  
+  
+  # for index in 1:wctx[:nchannels]
+  #   wctx[index] = Dict{Symbol, Any}()
+  #   wctx[index][:data] = cctx[index][:data]
+  #   wctx[index][:axis] = cctx[index][:axis]
+  #   # wctx[index][:color] = cctx[index][:color]
+  #   wctx[index][:crange] = cctx[index][:crange]
+  #   # wctx[index][:name] = cctx[index][:name]
+
+  #   mask = Matrix{Bool}(undef, size(cctx[index][:data][]))
+  #   mask .= false
+  #   wctx[index][:mask] = Observable(mask)
+
+  #   addvariable!(vars, "S$index", wctx[index][:mask])
+  # end
+
   wctx[:mouse_position] = cctx[:mouse_position]
+  #TODO: rename this! Maybe :active_channel / :focused_channel
   wctx[:focused] = cctx[:focused]
 
   on(store[:update]) do _
@@ -90,46 +148,49 @@ function initcontext(widget::ChannelViewMaskWidget, ctx)
     if !haskey(shelf, entry.id)
       shelf[entry.id] = MaskData()
     end
-    for index in 1:wctx[:nchannels]
-      shelf[entry.id].masks[index] = copy(wctx[index][:mask][])
+    for index in 1:wctx[:nmasks]
+      data = wctx[:masks][index][:data][]
+      shelf[entry.id].masks[index] = copy(data)
     end
   end
 
   on(store[:change], update = true) do (next, prev)
     # If next is nothing, assume that prev was deleted
     if isnothing(next)
-      for index in 1:wctx[:nchannels]
-        wctx[index][:mask][] = fill(false, 1, 1)
+      for index in 1:wctx[:nmasks]
+        wctx[:masks][index][:data][] = fill(false, 1, 1)
       end
       return
     end
 
     if !isnothing(prev)
-      # this means that there was a prev entry whose mask should be saved
+      # This means that there was a prev entry whose mask should be saved
+      # like on store[:update] above
       if !haskey(shelf, prev.id)
-        # it is the first time we save it
         shelf[prev.id] = MaskData()
       end
-      for index in 1:wctx[:nchannels]
-        shelf[prev.id].masks[index] = copy(wctx[index][:mask][])
+      for index in 1:wctx[:nmasks]
+        data = wctx[:masks][index][:data][]
+        shelf[prev.id].masks[index] = copy(data)
       end
     end
 
     # Finally, load the next mask
-    for index in 1:wctx[:nchannels]
+    for index in 1:wctx[:nmasks]
       if haskey(shelf, next.id)
-        wctx[index][:mask][] = shelf[next.id].masks[index]
+        wctx[:masks][index][:data][] = shelf[next.id].masks[index]
       else
         sz = planesize(imagefile(next))
-        wctx[index][:mask][] = fill(false, sz)
+        wctx[:masks][index][:data][] = fill(false, sz)
       end
     end
   end
 
   wctx[:pointer_on] = Observable(true)
   wctx[:mask_on] = Observable(true)
-  wctx[:pen_on] = Observable(false)
+  wctx[:link_on] = Observable(false)
   wctx[:segment_on] = Observable(false)
+  wctx[:pen_on] = Observable(false)
   wctx[:pen_size] = Observable(100)
 
   on(wctx[:pointer_on]) do pointer
@@ -140,6 +201,9 @@ function initcontext(widget::ChannelViewMaskWidget, ctx)
   end
   on(wctx[:pen_on]) do pen
     @info "Setting option :pen_on in channel view widget to $pen"
+  end
+  on(wctx[:link_on]) do link
+    @info "Setting option :link_on in channel view widget to $link"
   end
   on(wctx[:segment_on]) do segment
     @info "Setting option :segment_on in channel view widget to $segment"
@@ -156,6 +220,23 @@ function initcontext(widget::ChannelViewMaskWidget, ctx)
 end
 
 gridlayoutoptions(widget::ChannelViewMaskWidget, wctx) = (size = (4, 1),)
+
+#
+# TODO: We have a problem here. We want to be able to notify the
+# returned mask, meaning that we should return
+#   wctx[:masks][mask_index][:data]
+# However, this is not sufficient if we want an observable that also reacts
+# to changes of
+#   wctx[:channels][index][:mask_index]
+# which is needed for some redrawing functionality
+#
+function _linked_mask_data(wctx, index)
+  mask_index = wctx[:channels][index][:mask_index]
+  masks = map(x -> x[:data], wctx[:masks])
+  lift(mask_index, masks...) do mask_index, masks...
+    isnothing(mask_index) ? nothing : masks[mask_index]
+  end
+end
 
 function _pointer_interaction!(wctx)
   for index in 1:wctx[:nchannels]
@@ -212,58 +293,25 @@ function _mask_interaction!(wctx)
 end
 
 struct PenInteraction
-  mask::Observable{Matrix{Bool}}
+  index::Int
   wctx::Dict
   update_mask::Observable{Nothing}
 end
 
-function PenInteraction(mask, wctx)
+function PenInteraction(index, wctx)
   update_mask = Observable{Nothing}(nothing)
   on(Observables.throttle(0.05, update_mask)) do _
-    notify(mask)
-  end
-  PenInteraction(mask, wctx, update_mask)
-end
-
-function Makie.process_interaction(pen::PenInteraction, event::MouseEvent, ax)
-  mask = pen.mask[]
-
-  r = round(Int, pen.wctx[:pen_size][] / 2.8)
-  c = round.(Int, event.data)
-  irange = max(c[1] - r, 1):min(c[1] + r, size(mask, 1))
-  jrange = max(c[2] - r, 1):min(c[2] + r, size(mask, 2))
-
-  left = [MouseEventTypes.leftdown, MouseEventTypes.leftdrag]
-  right = [MouseEventTypes.rightdown, MouseEventTypes.rightdrag]
-
-  if event.type in left
-    for i in irange, j in jrange
-      under_pen = (c[1] - i)^2 + (c[2] - j)^2 < r^2
-      mask[i, j] = mask[i, j] || under_pen
+    mask = _linked_mask_data(wctx, index)
+    if !isnothing(mask)
+      notify(mask)
     end
-    notify(pen.update_mask)
-  elseif event.type in right
-    for i in irange, j in jrange
-      under_pen = (c[1] - i)^2 + (c[2] - j)^2 < r^2
-      mask[i, j] = mask[i, j] && !under_pen
-    end
-    notify(pen.update_mask)
   end
-
-  return
-end
-
-function Makie.process_interaction(pen::PenInteraction, event::ScrollEvent, ax)
-  limits = ax.finallimits[]
-  factor = maximum(limits.widths) * 0.04
-  size_change = round(Int, event.y * factor)
-  return pen.wctx[:pen_size][] = max(1, pen.wctx[:pen_size][] + size_change)
+  PenInteraction(index, wctx, update_mask)
 end
 
 function _pen_interaction!(wctx)
   for index in 1:wctx[:nchannels]
-    ax = wctx[index][:axis][]
-    mask = wctx[index][:mask]
+    ax = wctx[:channels][index][:axis][]
 
     visible = lift(wctx[:pen_on], wctx[:focused]) do pen, active
       return pen && active == index
@@ -291,7 +339,7 @@ function _pen_interaction!(wctx)
       end
     end
 
-    Makie.register_interaction!(ax, :pen, PenInteraction(mask, wctx))
+    Makie.register_interaction!(ax, :pen, PenInteraction(index, wctx))
     if !wctx[:pen_on][]
       Makie.deactivate_interaction!(ax, :pen)
     end
@@ -300,81 +348,58 @@ function _pen_interaction!(wctx)
   return
 end
 
+function Makie.process_interaction(pen::PenInteraction, event::MouseEvent, ax)
+  mask = _linked_mask_data(pen.wctx, pen.index)
+
+  if isnothing(mask)
+    return
+  else
+    data = mask[]
+  end
+
+  r = round(Int, pen.wctx[:pen_size][] / 2.8)
+  c = round.(Int, event.data)
+  irange = max(c[1] - r, 1):min(c[1] + r, size(data, 1))
+  jrange = max(c[2] - r, 1):min(c[2] + r, size(data, 2))
+
+  left = [MouseEventTypes.leftdown, MouseEventTypes.leftdrag]
+  right = [MouseEventTypes.rightdown, MouseEventTypes.rightdrag]
+
+  if event.type in left
+    for i in irange, j in jrange
+      under_pen = (c[1] - i)^2 + (c[2] - j)^2 < r^2
+      data[i, j] = data[i, j] || under_pen
+    end
+    notify(pen.update_mask)
+  elseif event.type in right
+    for i in irange, j in jrange
+      under_pen = (c[1] - i)^2 + (c[2] - j)^2 < r^2
+      data[i, j] = data[i, j] && !under_pen
+    end
+    notify(pen.update_mask)
+  end
+
+  return
+end
+
+function Makie.process_interaction(pen::PenInteraction, event::ScrollEvent, ax)
+  limits = ax.finallimits[]
+  factor = maximum(limits.widths) * 0.04
+  size_change = round(Int, event.y * factor)
+  pen.wctx[:pen_size][] = max(1, pen.wctx[:pen_size][] + size_change)
+  return
+end
+
+
 struct SegmentInteraction
-  mask::Observable{Matrix{Bool}}
+  index::Int
   wctx::Dict
   seeds::Observable{Vector{Point2f}}
 end
 
-function Makie.process_interaction(
-  seg::SegmentInteraction,
-  event::ScrollEvent,
-  ax,
-)
-  mask = seg.mask[]
-  if event.y < 0
-    ImageMorphology.erode!(mask; r = 1)
-  else
-    ImageMorphology.dilate!(mask; r = 1)
-  end
-  notify(seg.mask)
-  return
-end
-
-function Makie.process_interaction(
-  seg::SegmentInteraction,
-  event::MouseEvent,
-  ax,
-)
-  if event.type in [MouseEventTypes.leftdown]
-    seg.seeds[] = [event.data]
-  elseif event.type in [MouseEventTypes.leftup]
-    if isempty(seg.seeds[])
-      # This sometimes happens when you click / double click
-      # on a single points
-      return
-    end
-    seg.seeds[] = [seg.seeds[][1], event.data]
-    seeds = map(seg.seeds[]) do seed
-      return Tuple(round.(Int, seed))
-    end
-
-    index = seg.wctx[:focused][]
-    data = seg.wctx[index][:data][]
-    cmin, cmax = seg.wctx[index][:crange][]
-
-    segment_task = Threads.@spawn begin
-      scaling = seg.wctx[:downscaling][]
-      sz_scaled = div.(size(data), scaling, RoundUp)
-      data_scaled = ImageTransformations.imresize(data, sz_scaled)
-      seeds_scaled = map(1:2, seeds, sz_scaled) do i, seed, sz
-        coords = clamp.(div.(seed, scaling, RoundUp), 1, sz)
-        CartesianIndex(coords) => i
-      end
-      segments = ImageSegmentation.seeded_region_growing(
-        clamp.(data_scaled, cmin, cmax),
-        seeds_scaled,
-      )
-      mask_scaled = ImageSegmentation.labels_map(segments) .== 1
-      if scaling > 1
-        ImageTransformations.imresize(mask_scaled, size(data)) .>= 0.5
-      else
-        mask_scaled
-      end
-    end
-
-    begin
-      seg.mask[] .|= fetch(segment_task)
-      seg.seeds[] = Point2f[]
-      notify(seg.mask)
-    end
-  end
-end
-
 function _segment_interaction!(wctx)
   for index in 1:wctx[:nchannels]
-    ax = wctx[index][:axis][]
-    mask = wctx[index][:mask]
+    ax = wctx[:channels][index][:axis][]
 
     visible = lift(wctx[:segment_on], wctx[:focused]) do pen, active
       return pen && active == index
@@ -417,7 +442,7 @@ function _segment_interaction!(wctx)
     Makie.register_interaction!(
       ax,
       :segment,
-      SegmentInteraction(mask, wctx, seeds),
+      SegmentInteraction(index, wctx, seeds),
     )
     if !wctx[:segment_on][]
       Makie.deactivate_interaction!(ax, :segment)
@@ -427,16 +452,95 @@ function _segment_interaction!(wctx)
   return
 end
 
+function Makie.process_interaction(
+  seg::SegmentInteraction,
+  event::ScrollEvent,
+  ax,
+)
+  mask = _linked_mask_data(seg.wctx, seg.index)
+  if isnothing(mask)
+    # The user-selected axis has no mask linked to it. Do nothing.
+    return
+  else
+    if event.y < 0
+      ImageMorphology.erode!(mask[]; r = 1)
+    else
+      ImageMorphology.dilate!(mask[]; r = 1)
+    end
+    notify(mask)
+  end
+  return
+end
+
+function Makie.process_interaction(
+  seg::SegmentInteraction,
+  event::MouseEvent,
+  ax,
+)
+  index = seg.index
+  mask = _linked_mask_data(seg.wctx, index)
+
+  if isnothing(mask)
+    # The user-selected axis has no mask linked to it. Do nothing.
+    return
+  elseif event.type in [MouseEventTypes.leftdown]
+    seg.seeds[] = [event.data]
+  elseif event.type in [MouseEventTypes.leftup]
+    if isempty(seg.seeds[])
+      # This sometimes happens when you click / double click
+      # on a single point
+      return
+    end
+    seg.seeds[] = [seg.seeds[][1], event.data]
+    seeds = map(seg.seeds[]) do seed
+      return Tuple(round.(Int, seed))
+    end
+
+    data = seg.wctx[:channels][index][:data][]
+    cmin, cmax = seg.wctx[:channels][index][:crange][]
+
+    segment_task = Threads.@spawn begin
+      scaling = seg.wctx[:downscaling][]
+      sz_scaled = div.(size(data), scaling, RoundUp)
+      data_scaled = ImageTransformations.imresize(data, sz_scaled)
+      seeds_scaled = map(1:2, seeds, sz_scaled) do i, seed, sz
+        coords = clamp.(div.(seed, scaling, RoundUp), 1, sz)
+        CartesianIndex(coords) => i
+      end
+      segments = ImageSegmentation.seeded_region_growing(
+        clamp.(data_scaled, cmin, cmax),
+        seeds_scaled,
+      )
+      mask_scaled = ImageSegmentation.labels_map(segments) .== 1
+      if scaling > 1
+        ImageTransformations.imresize(mask_scaled, size(data)) .>= 0.5
+      else
+        mask_scaled
+      end
+    end
+
+    begin
+      mask[] .|= fetch(segment_task)
+      notify(mask)
+      seg.seeds[] = Point2f[]
+    end
+  end
+end
+
+
 function _reset_interactions!(wctx)
   for index in 1:wctx[:nchannels]
-    ax = wctx[index][:axis][]
+    ax = wctx[:channels][index][:axis][]
     Makie.deactivate_interaction!(ax, :limitreset)
     Makie.register_interaction!(ax, :reset) do event::MouseEvent, ax
       if event.type == MouseEventTypes.leftdoubleclick
         reset_limits!(ax)
       elseif event.type == MouseEventTypes.rightdoubleclick
-        wctx[index][:mask][] .= false
-        notify(wctx[index][:mask])
+        mask = _linked_mask_data(wctx, index)
+        if !isnothing(mask)
+          mask[] .= false
+          notify(mask)
+        end
       end
     end
   end
