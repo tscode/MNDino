@@ -31,6 +31,7 @@ StructPack = "9297859c-0cb3-4368-9f60-4c60e5718164"
 [compat]
 julia = "1.9"
 StructPack = "0.3"
+Makie = "0.22 - 0.23"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
