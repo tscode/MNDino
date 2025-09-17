@@ -56,7 +56,7 @@ function _imageselector_topline(layout, yindex, wctx, theme)
   # until the full view is updated.
   # How can I change this?
   text = lift(wctx[:loading]) do loading
-    loading ? "Loading..." : " "
+    loading ? "Loading..." : ""
   end
 
   Label(

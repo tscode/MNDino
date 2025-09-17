@@ -220,7 +220,7 @@ function _channelview_topline(layout, yindex, wctx, theme)
   filter_toggle = Toggle(layout[1, 5]; height = 20)
   filter_indicator = Label(
     layout[1, 6],
-    " ";
+    "";
     font = :bold,
     fontsize = theme[:fontsize],
     width = 100,
@@ -478,7 +478,7 @@ function _channelview_values(layout, yindex, wctx, theme)
     # in Makie?
     mouse_value = Observables.throttle(0.25, wctx[index][:mouse_value]) 
     value = lift(mouse_value) do val
-      return isnan(val) ? " " : string(round(val))
+      return isnan(val) ? "" : string(round(val))
     end
     Label(
       layout[yindex, index],

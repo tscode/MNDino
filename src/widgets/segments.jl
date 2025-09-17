@@ -1,4 +1,8 @@
 
+# TODO: The segments widget should manage the actual masks, and the
+# ChannelViewMaskWidget (rename to ChannelSegmentWidget?) should only bridge
+# between the ChannelViewWidget (rename to ChannelWidget?) and the
+# SegmentsWidget (rename to SegmentWidget?)
 struct SegmentsWidget <: Widget
   title::String
   segment_provider::Symbol
@@ -24,11 +28,11 @@ function initcontext(widget::SegmentsWidget, ctx)
 
   for index in 1:wctx[:nmasks]
     wctx[:masks][index] = Dict{Symbol, Any}()
-    wctx[:masks][index][:mask] = mpctx[index][:mask]
-    wctx[:masks][index][:color] = mpctx[index][:color]
-    wctx[:masks][index][:name] = mpctx[index][:name]
+    wctx[:masks][index][:mask] = mpctx[:masks][index][:data]
+    wctx[:masks][index][:color] = mpctx[:masks][index][:color]
+    wctx[:masks][index][:name] = mpctx[:masks][index][:name]
     if index == 1
-      on(mpctx[index][:mask]) do mask
+      on(mpctx[:masks][index][:data]) do mask
         wctx[:size][] = size(mask)
       end
     end
