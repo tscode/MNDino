@@ -9,6 +9,8 @@ end
 
 MaskData() = MaskData(OrderedDict{Int, Matrix{Bool}}())
 
+# TODO: Rename this to ChannelSegmentWidget and move most of the segment
+# functionality to SegmentWidget
 """
 Widget that extends a [`ChannelViewWidget`] by adding mask drawing and
 segmentation functionality.
@@ -96,6 +98,19 @@ function initcontext(widget::ChannelViewMaskWidget, ctx)
       :color => cctx[cid][:color],
       :mid => Observable{Any}(mid),
     )
+  end
+
+  # Make sure that no mask is linked to several channels
+  for cid in 1:wctx[:nchannels]
+    on(wctx[:channels][cid][:mid]) do mid
+      if !isnothing(mid)
+        for _cid in 1:wctx[:nchannels]
+          if _cid != cid && wctx[:channels][_cid][:mid][] == mid
+            wctx[:channels][_cid][:mid][] = nothing
+          end
+        end
+      end
+    end
   end
 
   # Associations between channels and masks should be set via
@@ -251,6 +266,42 @@ function _linked_mask_id(wctx, cid)
   return wctx[:channels][cid][:mid]
 end
 
+function _link_interaction!(wctx)
+  menus = []
+  options = map(1:wctx[:nmasks]) do mid
+    ("⧉ S$mid", mid)
+  end
+  options = [options; [("unlinked", nothing)]]
+  for cid in 1:wctx[:nchannels]
+    ax = wctx[:channels][cid][:axis][]
+    mid = wctx[:channels][cid][:mid][]
+    default = isnothing(mid) ? options[end][1] : options[mid][1]
+    menu = Menu(
+      ax.parent;
+      bbox = ax.scene.viewport,
+      options,
+      default,
+      fontsize = 10,
+      valign = 0.02,
+      halign = 0.98,
+      width = 60,
+    )
+    push!(menus, menu)
+
+    # Keep wctx[:channels][cid][:mid] synchronized with menu selection
+    on(wctx[:channels][cid][:mid]) do mid
+      if mid != menu.selection[]
+        menu.i_selected[] = isnothing(mid) ? length(options) : mid
+      end
+    end
+    on(menu.selection) do mid
+      wctx[:channels][cid][:mid][] = mid
+    end
+    
+  end
+  return
+end
+
 function _pointer_interaction!(wctx)
   for cid in 1:wctx[:nchannels]
     # Plot the position marker
@@ -285,6 +336,13 @@ function _mask_interaction!(wctx)
       !isnothing(data) && visible
     end
 
+    # Unset mask_data if the channel is unlinked
+    on(mid) do mid
+      if isnothing(mid)
+        mask_data[] = nothing
+      end
+    end
+
     # Make mask_data observable react to changes of linked masks
     for mask_id in 1:wctx[:nmasks]
       data = wctx[:masks][mask_id][:data]
@@ -297,7 +355,7 @@ function _mask_interaction!(wctx)
 
     # Get the size of the mask data
     on(mask_data; update = true) do data
-      sz = isnothing(data) ? nothing : size(data)
+      sz = isnothing(data) ? (1, 1) : size(data)
       if mask_sz[] != sz
         mask_sz[] = sz
       end
@@ -659,6 +717,7 @@ function plotwidget(::ChannelViewMaskWidget, layout, wctx, theme)
     labelcolor = lift(_decide(:white, :black), wctx[:segment_on]),
   )
 
+  _link_interaction!(wctx)
   _pointer_interaction!(wctx)
   _mask_interaction!(wctx)
   _pen_interaction!(wctx)

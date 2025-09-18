@@ -97,6 +97,55 @@ function ImageStore(paths::Vector{String})
   )
 end
 
+"""
+    rmimages(store::ImageStore, ids)
+    rmimages(store::ImageStore, paths)
+
+Remove the images defined by `paths` or `ids` from the image store `store`.
+"""
+function rmimages(store::ImageStore, paths_to_remove::Vector{String})
+  ids = copy(store.ids)
+  paths = copy(store.paths)
+  shelfs = copy(store.shelfs)
+  active_index = store.active_index
+  @assert 1 <= active_index <= length(ids) """
+  Image store malformed: field :active_index is greater than number of images.
+  """
+  active_id = ids[active_index]
+
+  for path in paths_to_remove
+    index = findfirst(isequal(path), paths)
+    if isnothing(index)
+      @error "Image $path does not exist. Cannot remove it from image store."
+    else
+      id = ids[index]
+      @info "Deleting image $id at $path from image store."
+      deleteat!(ids, index)
+      deleteat!(paths, index)
+      for shelf in values(shelfs)
+        delete!(shelf, id)
+      end
+    end
+  end
+
+  active_index = findfirst(isequal(active_id), ids)
+  if isnothing(active_index)
+    active_index = isempty(paths) ? -1 : 1
+    @info "Active index of the store was set to $active_index"
+  end
+
+  return ImageStore(ids, paths, shelfs, active_index)
+end
+
+function rmimages(store::ImageStore, ids_to_remove::Vector{Int})
+  paths_to_remove = map(ids_to_remove) do id
+    index = findfirst(isequal(id), store.ids)
+    store.paths[index]
+  end
+  rmimages(store, paths_to_remove)
+end
+
+
 function initcontext(store::ImageStore, ctx)
   pctx = Dict{Union{Symbol, Int}, Any}()
 
