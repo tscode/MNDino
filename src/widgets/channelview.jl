@@ -1,9 +1,11 @@
 
+# TODO: This plane selection struct should be renamed to something more sensible.
 struct View <: Storable
   zindex::Int
   tindex::Int
 end
 
+# TODO: Rename this to ChannelWidget
 struct ChannelViewWidget <: Widget
   title::String
   filter::Filter
