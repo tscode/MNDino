@@ -25,6 +25,7 @@ function plotwidgetframe(
   theme;
   outer = false,
   framepadding = theme[:framepadding],
+  z = -10,
 )
   position = outer ? layout[:, :, Outer()] : layout[:, :]
   Box(
@@ -33,6 +34,7 @@ function plotwidgetframe(
     strokecolor = theme[:framecolor],
     cornerradius = theme[:cornerradius],
     alignmode = Outside(-framepadding),
+    z = z,
   )
   return
 end

@@ -123,7 +123,8 @@ function newproject(;
     Starting channel configurator based on image
       $path_example
     """
-    channels = channelconfigurator(loadimagefile(path_example))
+    img_example = loadimagefile(path_example)
+    channels = runchannelconfigurator(img_example, theme)
   else
     channels = []
   end
@@ -165,6 +166,7 @@ function newproject(;
       parent = :view,
       image_store = :images,
       variable_store = :variables,
+      mask_channels = channels,
     )
   end
 

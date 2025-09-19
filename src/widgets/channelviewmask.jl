@@ -26,10 +26,11 @@ function ChannelViewMaskWidget(
   parent,
   image_store,
   variable_store,
+  mask_channels = []
 )
   return ChannelViewMaskWidget(
     title,
-    [],
+    mask_channels,
     parent,
     image_store,
     variable_store,
