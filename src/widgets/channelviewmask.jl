@@ -1,7 +1,6 @@
 
 """
 Storage for one mask per mask channel.
-using Base: nothing_sentinel
 """
 struct MaskData <: Storable
   masks::OrderedDict{Int, Matrix{Bool}}
@@ -28,7 +27,7 @@ function ChannelViewMaskWidget(
   parent,
   image_store,
   variable_store,
-  mask_channels = []
+  mask_channels = [],
 )
   return ChannelViewMaskWidget(
     title,
@@ -90,9 +89,9 @@ function initcontext(widget::ChannelViewMaskWidget, ctx)
 
   wctx[:channels] = map(1:wctx[:nchannels]) do cid
     mid = findfirst(wctx[:mask_channels]) do c
-      c.cindex == cid
+      return c.cindex == cid
     end
-    Dict{Symbol, Any}(
+    return Dict{Symbol, Any}(
       :axis => cctx[cid][:axis],
       :data => cctx[cid][:data],
       :crange => cctx[cid][:crange],
@@ -126,22 +125,22 @@ function initcontext(widget::ChannelViewMaskWidget, ctx)
     # Get observable for channel number (not c-index) associated to this mask
     cid = lift(mids...) do mids...
       cid = findfirst(isequal(mid), mids)
-      isnothing(cid) ? -1 : cid
+      return isnothing(cid) ? -1 : cid
     end
-    
+
     name = Observable(wctx[:mask_channels][mid].name)
     color = Observable(wctx[:mask_channels][mid].color)
 
     onany(cid, name, color) do cid, name, color
-      wctx[:mask_channels][mid] = Channel(cid, name, color)
+      return wctx[:mask_channels][mid] = Channel(cid, name, color)
     end
 
     # TODO: Right way to get current planesize ?
     sz = planesize(imagefile(store[:entry][]))
     data = Observable(fill(false, sz))
     addvariable!(vars, "S$mid", data)
-    
-    Dict{Symbol, Any}(
+
+    return Dict{Symbol, Any}(
       :cid => cid,
       :name => name,
       :color => color,
@@ -164,7 +163,7 @@ function initcontext(widget::ChannelViewMaskWidget, ctx)
     end
   end
 
-  on(store[:change], update = true) do (next, prev)
+  on(store[:change]; update = true) do (next, prev)
     # If next is nothing, assume that prev was deleted
     if isnothing(next)
       for mid in 1:wctx[:nmasks]
@@ -270,7 +269,7 @@ end
 function _link_interaction!(wctx)
   menus = []
   options = map(1:wctx[:nmasks]) do mid
-    ("⧉ S$mid", mid)
+    return ("⧉ S$mid", mid)
   end
   options = [options; [("unlinked", nothing)]]
   for cid in 1:wctx[:nchannels]
@@ -287,6 +286,16 @@ function _link_interaction!(wctx)
       halign = 0.98,
       width = 60,
     )
+    # Currently there is a Makie bug such that mousedowns on the menu button
+    # itself are not consumed (while mouse-ups are) and thus interact with
+    # axis-mouse functionality. This is fixed by the following line
+    consumemouse(
+      menu.blockscene,
+      menu.layoutobservables.computedbbox;
+      priority = 60,
+      button = true,
+      position = false,
+    )
     push!(menus, menu)
 
     # Keep wctx[:channels][cid][:mid] synchronized with menu selection
@@ -296,9 +305,8 @@ function _link_interaction!(wctx)
       end
     end
     on(menu.selection) do mid
-      wctx[:channels][cid][:mid][] = mid
+      return wctx[:channels][cid][:mid][] = mid
     end
-    
   end
   return
 end
@@ -334,7 +342,7 @@ function _mask_interaction!(wctx)
     mask_data = Observable{Any}(nothing)
     mask_data_scaled = Observable(zeros(Float32, 1, 1))
     mask_visible = map(mask_data, wctx[:mask_on]) do data, visible
-      !isnothing(data) && visible
+      return !isnothing(data) && visible
     end
 
     # Unset mask_data if the channel is unlinked
@@ -412,7 +420,7 @@ function PenInteraction(cid, wctx)
       notify(mask)
     end
   end
-  PenInteraction(cid, wctx, update_mask)
+  return PenInteraction(cid, wctx, update_mask)
 end
 
 function _pen_interaction!(wctx)
@@ -495,7 +503,6 @@ function Makie.process_interaction(pen::PenInteraction, event::ScrollEvent, ax)
   pen.wctx[:pen_size][] = max(1, pen.wctx[:pen_size][] + size_change)
   return
 end
-
 
 struct SegmentInteraction
   cid::Int
@@ -611,7 +618,7 @@ function Makie.process_interaction(
       data_scaled = ImageTransformations.imresize(data, sz_scaled)
       seeds_scaled = map(1:2, seeds, sz_scaled) do i, seed, sz
         coords = clamp.(div.(seed, scaling, RoundUp), 1, sz)
-        CartesianIndex(coords) => i
+        return CartesianIndex(coords) => i
       end
       segments = ImageSegmentation.seeded_region_growing(
         clamp.(data_scaled, cmin, cmax),
@@ -632,7 +639,6 @@ function Makie.process_interaction(
     end
   end
 end
-
 
 function _reset_interactions!(wctx)
   for cid in 1:wctx[:nchannels]

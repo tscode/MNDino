@@ -3,6 +3,7 @@
 # ChannelViewMaskWidget (rename to ChannelSegmentWidget?) should only bridge
 # between the ChannelViewWidget (rename to ChannelWidget?) and the
 # SegmentsWidget (rename to SegmentWidget?)
+# TODO: Renaming of segments in this widget
 struct SegmentsWidget <: Widget
   title::String
   segment_provider::Symbol
@@ -106,11 +107,11 @@ function _segments_showsegments(layout, wctx, theme)
     ax.limits[] = ((0, sz[1]), (0, sz[2]))
   end
 
-  sublayout = GridLayout(layout[2, 2], 3wctx[:nmasks], 1)
+  sublayout = GridLayout(layout[2, 2], 2wctx[:nmasks], 1, default_rowgap = 10)
   for index in 1:wctx[:nmasks]
     mask = wctx[:masks][index][:mask]
     Label(
-      sublayout[3index - 2, 1],
+      sublayout[2index - 1, 1],
       lift(n -> "S$index: " * n, wctx[:masks][index][:name]);
       font = :bold,
       fontsize = theme[:fontsize],
@@ -118,22 +119,21 @@ function _segments_showsegments(layout, wctx, theme)
       halign = :left,
     )
     Label(
-      sublayout[3index - 1, 1],
-      lift(m -> "pixels: " * string(count(m)), mask);
+      sublayout[2index, 1],
+      lift(m -> string(count(m)) * "px", mask);
       fontsize = theme[:ticksize],
       color = (:black, 0.7),
       halign = :left,
     )
-    fraction = m -> string(round(100mean(m); digits = 2))
+    fraction = m -> string(round(100mean(m); digits = 0))
     Label(
-      sublayout[3index, 1],
-      lift(m -> "fraction: " * fraction(m) * "%", mask);
+      sublayout[2index, 1],
+      lift(m -> fraction(m) * "%", mask);
       fontsize = theme[:ticksize],
       color = (:black, 0.7),
-      halign = :left,
+      halign = :right,
     )
-    rowgap!(sublayout, 3index - 2, 5)
-    rowgap!(sublayout, 3index - 1, 5)
+    rowgap!(sublayout, 2index - 1, 2)
   end
 
   return

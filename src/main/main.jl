@@ -120,17 +120,16 @@ function newproject(;
   if !dryrun
     path_example = first(paths)
     @info """
-    Starting channel configurator based on image
-      $path_example
+    Starting project configurator based on image $path_example
     """
     img_example = loadimagefile(path_example)
-    channels = runchannelconfigurator(img_example, theme)
+    config = runconfigurator(img_example, theme)
   else
-    channels = []
+    config = (channels = [], segments = [])
   end
 
-  if isnothing(channels)
-    @info "Channel configuration aborted."
+  if isnothing(config)
+    @info "Project configuration aborted."
     return nothing
   end
   
@@ -157,7 +156,7 @@ function newproject(;
       "Channels";
       image_store = :images,
       variable_store = :variables,
-      channels = channels,
+      channels = config.channels,
     )
   end
 
@@ -166,7 +165,7 @@ function newproject(;
       parent = :view,
       image_store = :images,
       variable_store = :variables,
-      mask_channels = channels,
+      mask_channels = config.segments,
     )
   end
 

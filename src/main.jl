@@ -1,7 +1,6 @@
 
 using GLMakie
 using GLMakie.GLFW
-using Makie: project_point2
 
 function default_theme()
   return Dict(

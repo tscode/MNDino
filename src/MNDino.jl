@@ -28,6 +28,7 @@ import ImageMorphology
 # Plotting / GUI framework
 using Makie
 using Makie.GridLayoutBase: Outer
+using Makie.GridLayoutBase
 using Observables
 
 # Opening and saving files
@@ -92,6 +93,9 @@ end
 
 # Makie "patch" to move dragpan to the *left* mouse button
 include("patches/dragpan.jl")
+# Functionality to consume mouse clicks for working around makie not consuming
+# mouse-downs on menu buttons.
+include("patches/consumemouse.jl")
 
 include("imagefile.jl")
 include("filter.jl")
@@ -119,7 +123,7 @@ include("widgets/segments.jl")
 include("widgets/analysis.jl")
 
 # Entry point to the main GUI
-include("main/channelconfig.jl")
+include("main/configurator.jl")
 include("main/export.jl")
 include("main/main.jl")
 
