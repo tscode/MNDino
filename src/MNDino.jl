@@ -124,8 +124,11 @@ include("widgets/analysis.jl")
 
 # Entry point to the main GUI
 include("main/configurator.jl")
-include("main/export.jl")
 include("main/main.jl")
+
+# Auxiliary scripts
+include("main/export.jl")
+include("main/convert.jl")
 
 # Precompilation statements to reduce startup time
 include("precompile.jl")
