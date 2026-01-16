@@ -53,18 +53,21 @@ end
 function convert_to_ometiff(bfconvert, source)
   path, ext = splitext(source)
   target = path * ".ome.tiff"
-  print("mndino> Converting $source -> $target... ")
+  println("mndino> Converting $source -> $target... ")
   if isfile(target)
-    println("ah, the target file already exists. Remove or rename it!")
+    println("mndino> Ah, the target file already exists. Remove or rename it!")
   else
-    cmd = `$bfconvert $source $target`
+    if Sys.iswindows()
+      cmd = `cmd /c $bfconvert $source $target`
+    else
+      cmd = `$bfconvert $source $target`
+    end
     try
-      process = run(cmd, wait = false)
-      success(process)
+      process = run(cmd)
     catch err
       println("\nmndino> Sorry, something went wrong: $err")
       return
     end
-    println("done!")
+    println("mndino> Done!")
   end
 end
