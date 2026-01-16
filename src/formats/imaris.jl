@@ -12,7 +12,7 @@ end
 
 Open the `.ims` file located at `path`.
 """
-function ImarisFile(path::String)
+function ImarisFile(path::String; layout = :auto)
   return ImarisFile(path, HDF5.h5open(path, "r"))
 end
 

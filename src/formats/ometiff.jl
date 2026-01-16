@@ -463,7 +463,7 @@ struct OmeTiffFile <: ImageFile
   tiffs::Dict{String, AbstractArray{<:Gray, 3}}
 end
 
-function OmeTiffFile(path::String)
+function OmeTiffFile(path::String; layout = :auto)
   xml = load_xml(path)
   meta = parse_xml(xml, Base.basename(path), Base.dirname(path))
   sz = meta.pixels.size[1:2]
@@ -480,7 +480,6 @@ function OmeTiffFile(path::String)
     uuid => tiff
   end
   tiffs = Dict(tiffs)
-  sleep(3)
 
   return OmeTiffFile(path, meta.pixels, meta.channels, meta.planes, tiffs)
 end
