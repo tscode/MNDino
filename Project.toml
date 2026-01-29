@@ -1,6 +1,6 @@
 name = "MNDino"
 uuid = "e1b276f8-d660-48c4-a7e4-7d1df9e82a2e"
-version = "0.2.0-beta-1"
+version = "0.2.0-beta-3"
 authors = ["Thomas Staudt <tscode@posteo.net>"]
 
 [deps]

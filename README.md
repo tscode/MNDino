@@ -9,7 +9,7 @@ As a library, MNDino aims to provide a number of general purpose widgets that ca
 The package is not yet officially registered. Use the following commands within a julia shell to install the latest stable version of the package.
 ```julia
 using Pkg
-Pkg.add(url="https://gitlab.gwdg.de/staudt1/mndino.git")
+Pkg.add(url="https://github.com/tscode/MNDino.git")
 ```
 A julia version of 1.9 or higher is strongly recommended. You can get julia from [here](https://julialang.org/downloads/).
 
