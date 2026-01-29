@@ -74,8 +74,8 @@ function runconfigurator(img::ImageFile, theme)
     padding = 10,
   )
 
-  channels = channelconfigurator(fig, fig[2, 1], img::ImageFile, theme)
-  segments = segmentconfigurator(fig, fig[3, 1], img::ImageFile, theme)
+  channels = channelconfigurator(fig, fig[2, 1], img, theme)
+  segments = segmentconfigurator(fig, fig[3, 1], img, theme)
 
   continue_button = Button(
     fig[4, 1];
@@ -106,7 +106,7 @@ function runconfigurator(img::ImageFile, theme)
   if abort
     return nothing
   else
-    return (; channels, segments)
+    return (; channels = channels[], segments = segments[])
   end
 end
 
@@ -250,7 +250,7 @@ function segmentconfigurator(fig, pos, img, theme)
 
   plotwidgetframe(layout, theme)
 
-  return segment_channels
+  return Observable(segment_channels)
 end
 
 function channelconfigurator(fig, pos, img::ImageFile, theme)
@@ -400,7 +400,7 @@ function channelconfigurator(fig, pos, img::ImageFile, theme)
       cindex[] = order[xindex]
       thumbnail[] = thumbnails[cindex[]]
       name[] = names[cindex[]]
-      return color[] = colors[cindex[]]
+      color[] = colors[cindex[]]
     end
 
     on(button_left.clicks) do _
@@ -429,7 +429,6 @@ function channelconfigurator(fig, pos, img::ImageFile, theme)
       namebox = make_namebox(str)
       on(namebox.stored_string) do str
         if !(str == name[])
-          println("Updated name to $str")
           names[cindex[]] = str
           notify(update)
         end
@@ -452,9 +451,11 @@ function channelconfigurator(fig, pos, img::ImageFile, theme)
 
   plotwidgetframe(layout, theme)
 
-  configured_channels = map(order) do index
-    @assert index == image_channels[index].cindex
-    return Channel(image_channels[index].cindex, names[index], colors[index])
+  configured_channels = map(update) do _
+    map(order) do index
+      @assert index == image_channels[index].cindex
+      return Channel(image_channels[index].cindex, names[index], colors[index])
+    end
   end
 
   return configured_channels

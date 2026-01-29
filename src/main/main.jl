@@ -127,6 +127,7 @@ function newproject(;
   else
     config = (channels = [], segments = [])
   end
+  @show config
 
   if isnothing(config)
     @info "Project configuration aborted."
